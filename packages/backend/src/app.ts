@@ -787,7 +787,7 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
         decision: status,
         details: { error: request.body?.error ?? null },
       });
-      return next;
+      return { status: next.state, transactionId: next.id };
     },
   );
   app.post<{ Params: { id: string; action: string } }>(

@@ -545,7 +545,10 @@ describe('staged task routes', () => {
       payload: { status: 'completed' },
     });
     expect(result.statusCode).toBe(200);
-    expect(result.json().state).toBe('completed');
+    expect(result.json()).toEqual({
+      status: 'completed',
+      transactionId: 'tx-apply',
+    });
     await app.close();
     taskStore.close();
     transactionStore.close();
