@@ -6,6 +6,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PairingManager } from './pairing.js';
+import { TransactionStore } from './transaction-store.js';
 import { createApp } from './app.js';
 
 describe('backend health API', () => {
@@ -138,6 +139,23 @@ describe('isolated Pi chat routes', () => {
     const pairing = new PairingManager(join(root, 'pairing.json'));
     const code = (await pairing.status()).pairingCode ?? '';
     const token = await pairing.exchange(code);
+    const transactionStore = new TransactionStore();
+    transactionStore.register({
+      id: 'tx-approved',
+      state: 'approved',
+      diffHash: 'hash',
+      files: [
+        {
+          path: 'automations.yaml',
+          content: '[]\n',
+          originalHash: null,
+          approved: true,
+        },
+      ],
+      validation: { status: 'passed', errors: [] },
+      createdAt: '2026-01-01T00:00:00Z',
+      approvedAt: '2026-01-01T00:01:00Z',
+    });
     const runtime = {
       healthCheck: vi.fn(async () => ({
         healthy: true,
@@ -159,6 +177,7 @@ describe('isolated Pi chat routes', () => {
     const app = createApp({
       piRuntime: runtime,
       pairingManager: pairing,
+      transactionStore,
       sessionRoot: root,
       haClient: {} as HomeAssistantClient,
     });
@@ -180,6 +199,13 @@ describe('isolated Pi chat routes', () => {
     expect(response.json().events).toEqual([
       { type: 'text_delta', delta: 'bridge response' },
     ]);
+    const transaction = await app.inject({
+      method: 'GET',
+      url: '/api/v1/bridge/transactions/tx-approved',
+      headers: { 'x-pi-integration-token': token },
+    });
+    expect(transaction.statusCode).toBe(200);
+    expect(transaction.json().files[0].content).toBe('[]\n');
     await app.close();
     await rm(root, { recursive: true, force: true });
   });

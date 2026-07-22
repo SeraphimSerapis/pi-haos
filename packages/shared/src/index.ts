@@ -36,3 +36,24 @@ export const agentEventSchema = z.object({
   timestamp: z.string(),
 });
 export type AgentEvent = z.infer<typeof agentEventSchema>;
+
+export const transactionFileSchema = z.object({
+  path: z.string(),
+  content: z.string(),
+  originalHash: z.string().nullable(),
+  approved: z.literal(true),
+});
+
+export const approvedTransactionSchema = z.object({
+  id: z.string(),
+  state: z.enum(['approved', 'validating', 'applying']),
+  diffHash: z.string(),
+  files: z.array(transactionFileSchema).max(100),
+  validation: z.object({
+    status: z.enum(['passed', 'pending', 'failed']),
+    errors: z.array(z.string()).max(100),
+  }),
+  createdAt: z.string(),
+  approvedAt: z.string(),
+});
+export type ApprovedTransaction = z.infer<typeof approvedTransactionSchema>;

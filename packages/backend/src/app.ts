@@ -13,6 +13,7 @@ import {
   type SessionInfo,
 } from '@pi-ha/pi-runtime';
 import { PairingManager } from './pairing.js';
+import { TransactionStore } from './transaction-store.js';
 
 const appVersion = process.env.APP_VERSION ?? '0.1.0';
 
@@ -24,6 +25,7 @@ export interface AppOptions {
   piRuntime?: PiRuntime;
   sessionRoot?: string;
   pairingManager?: PairingManager;
+  transactionStore?: TransactionStore;
 }
 
 export function createApp(options: AppOptions = {}): FastifyInstance {
@@ -57,6 +59,7 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
   const sessionRoot =
     options.sessionRoot ?? join(process.env.DATA_DIR ?? '/data', 'sessions');
   const pairing = options.pairingManager ?? new PairingManager();
+  const transactionStore = options.transactionStore ?? new TransactionStore();
 
   app.get('/api/v1/health', async () => ({ status: 'ok' }));
   app.get('/api/v1/pairing', async () => pairing.status());
@@ -223,6 +226,18 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
       reply
         .code(501)
         .send({ error: 'Mutation transactions are not enabled yet' }),
+  );
+  app.get<{ Params: { id: string } }>(
+    '/api/v1/bridge/transactions/:id',
+    { preHandler: requireBridgeAuth },
+    async (request, reply) => {
+      const transaction = transactionStore.getApproved(request.params.id);
+      if (!transaction)
+        return reply
+          .code(404)
+          .send({ error: 'Approved validated transaction not found' });
+      return transaction;
+    },
   );
   app.post<{ Params: { id: string } }>(
     '/api/v1/bridge/tasks/:id/:action',
