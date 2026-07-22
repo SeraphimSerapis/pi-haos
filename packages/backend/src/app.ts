@@ -79,8 +79,7 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
     options.taskStore ??
     new TaskStore(
       process.env.TASK_DATABASE ??
-        (process.env.NODE_ENV === 'test'
-          || process.env.VITEST === 'true'
+        (process.env.NODE_ENV === 'test' || process.env.VITEST === 'true'
           ? ':memory:'
           : join(process.env.DATA_DIR ?? '/data', 'database', 'tasks.sqlite')),
     );
