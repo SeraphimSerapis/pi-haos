@@ -9,6 +9,7 @@ import { SkillsManager } from '@pi-ha/skills-manager';
 import type { SkillManifest } from '@pi-ha/skills-manager';
 import {
   RpcPiRuntime,
+  PiUpdateManager,
   type PiRuntime,
   type SessionInfo,
 } from '@pi-ha/pi-runtime';
@@ -38,6 +39,7 @@ export interface AppOptions {
   activationAdapter?: ActivationAdapter;
   taskStore?: TaskStore;
   auditStore?: AuditStore;
+  piUpdateManager?: PiUpdateManager;
 }
 
 export function createApp(options: AppOptions = {}): FastifyInstance {
@@ -108,6 +110,13 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
       // Audit failure must not widen authority or block a safe read operation.
     }
   };
+  const piUpdateManager =
+    options.piUpdateManager ??
+    new PiUpdateManager({
+      root: join(process.env.DATA_DIR ?? '/data', 'pi'),
+      bundledVersion: process.env.PI_VERSION ?? '0.81.1',
+      isIdle: () => sessions.size === 0,
+    });
 
   app.get('/api/v1/health', async () => ({ status: 'ok' }));
   app.get('/api/v1/pairing', async () => pairing.status());
@@ -174,6 +183,55 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
   app.get('/api/v1/context/check-config', async () => haClient.checkConfig());
 
   app.get('/api/v1/pi/health', async () => piRuntime.healthCheck());
+  app.get('/api/v1/pi/update/status', async () => piUpdateManager.status());
+  app.post<{ Body: { version?: string; confirm?: boolean } }>(
+    '/api/v1/pi/update/activate',
+    async (request, reply) => {
+      if (request.body?.confirm !== true)
+        return reply
+          .code(400)
+          .send({ error: 'Explicit Pi activation confirmation is required' });
+      if (!request.body.version)
+        return reply.code(400).send({ error: 'version is required' });
+      try {
+        const status = await piUpdateManager.activate(request.body.version);
+        audit({
+          action: 'pi.update.activate',
+          initiator: 'frontend',
+          piVersion: request.body.version,
+          decision: 'approved',
+          details: { status },
+        });
+        return status;
+      } catch (error) {
+        return reply.code(409).send({
+          error:
+            error instanceof Error ? error.message : 'Pi activation failed',
+        });
+      }
+    },
+  );
+  app.post('/api/v1/pi/update/rollback', async (request, reply) => {
+    if ((request.body as { confirm?: boolean } | undefined)?.confirm !== true)
+      return reply
+        .code(400)
+        .send({ error: 'Explicit Pi rollback confirmation is required' });
+    try {
+      const status = await piUpdateManager.rollback();
+      audit({
+        action: 'pi.update.rollback',
+        initiator: 'frontend',
+        piVersion: status.active,
+        decision: 'approved',
+        details: { status },
+      });
+      return status;
+    } catch (error) {
+      return reply.code(409).send({
+        error: error instanceof Error ? error.message : 'Pi rollback failed',
+      });
+    }
+  });
   app.get('/api/v1/transactions', async () => transactionStore.list());
   app.get<{ Querystring: { limit?: string } }>(
     '/api/v1/audit',
