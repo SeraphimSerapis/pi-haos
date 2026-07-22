@@ -12,7 +12,7 @@ root.innerHTML = `
     .card { border: 1px solid #8885; border-radius: .5rem; padding: 1rem; margin: 1rem 0; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
     label { display: grid; gap: .35rem; margin: .7rem 0; }
-    input, select { padding: .55rem; border: 1px solid #8888; border-radius: .35rem; background: Canvas; color: inherit; }
+    input, select, textarea { padding: .55rem; border: 1px solid #8888; border-radius: .35rem; background: Canvas; color: inherit; font: inherit; }
     .muted { opacity: .72; }
     code { font-family: ui-monospace, monospace; }
   </style>
@@ -50,7 +50,7 @@ function renderSection(section: string): void {
     return;
   }
   content.innerHTML = `<section class="card"><h2>${escapeHtml(section[0]?.toUpperCase() + section.slice(1))}</h2><p class="muted">This section is scaffolded for the staged, auditable workflow.</p></section>`;
-  if (section === 'chat') void renderStatus();
+  if (section === 'chat') void renderChat();
 }
 
 async function renderStatus(): Promise<void> {
@@ -66,6 +66,61 @@ async function renderStatus(): Promise<void> {
     content.innerHTML =
       '<section class="card"><p>Backend unavailable. Check the App logs.</p></section>';
   }
+}
+
+let chatSessionId: string | null = null;
+
+async function renderChat(): Promise<void> {
+  if (!content) return;
+  content.innerHTML = `<section class="card"><h2>Chat</h2><p class="muted">Pi works in an isolated workspace. Configuration changes remain staged for review.</p><form id="chat-form"><label>Message<textarea name="message" rows="5" required maxlength="8192" placeholder="Ask Pi to inspect your Home Assistant instance…"></textarea></label><button type="submit">Send</button></form><pre id="chat-output" class="card" aria-live="polite"></pre></section>`;
+  document
+    .querySelector<HTMLFormElement>('#chat-form')
+    ?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget as HTMLFormElement);
+      const message = String(form.get('message') ?? '').trim();
+      const output = document.querySelector<HTMLElement>('#chat-output');
+      if (!message || !output) return;
+      output.textContent = 'Pi is thinking…';
+      try {
+        if (!chatSessionId) {
+          const session = await api<{ id: string }>('/chat/sessions', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: '{}',
+          });
+          chatSessionId = session.id;
+        }
+        const result = await api<{
+          events: Array<{
+            type: string;
+            delta?: string;
+            status?: string;
+            toolName?: string;
+            message?: string;
+          }>;
+        }>(`/chat/sessions/${encodeURIComponent(chatSessionId)}/messages`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ message }),
+        });
+        output.textContent = result.events
+          .map((event) =>
+            event.type === 'text_delta'
+              ? event.delta
+              : event.type === 'tool_start'
+                ? `[tool: ${event.toolName ?? 'unknown'}]`
+                : event.type === 'error'
+                  ? event.message
+                  : '',
+          )
+          .join('');
+        (event.currentTarget as HTMLFormElement).reset();
+      } catch {
+        output.textContent =
+          'Pi could not complete the request. Check the App logs and model configuration.';
+      }
+    });
 }
 
 async function renderModels(): Promise<void> {
