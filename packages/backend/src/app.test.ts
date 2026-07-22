@@ -225,6 +225,21 @@ describe('isolated Pi chat routes', () => {
     expect(response.json().events).toEqual([
       { type: 'text_delta', delta: 'bridge response' },
     ]);
+    const task = await app.inject({
+      method: 'POST',
+      url: '/api/v1/bridge/tasks',
+      headers: { 'x-pi-integration-token': token },
+      payload: { prompt: 'Review automation safety' },
+    });
+    expect(task.statusCode).toBe(201);
+    const taskId = task.json().id as string;
+    const cancelled = await app.inject({
+      method: 'POST',
+      url: `/api/v1/bridge/tasks/${taskId}/cancel`,
+      headers: { 'x-pi-integration-token': token },
+    });
+    expect(cancelled.statusCode).toBe(200);
+    expect(cancelled.json().state).toBe('cancelled');
     const transaction = await app.inject({
       method: 'GET',
       url: '/api/v1/bridge/transactions/tx-approved',

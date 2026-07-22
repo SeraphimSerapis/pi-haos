@@ -292,10 +292,25 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
   app.post(
     '/api/v1/bridge/tasks',
     { preHandler: requireBridgeAuth },
-    async (_request, reply) =>
-      reply
-        .code(501)
-        .send({ error: 'Mutation transactions are not enabled yet' }),
+    async (request, reply) => {
+      const body = request.body as
+        { prompt?: string; model?: string } | undefined;
+      const prompt = body?.prompt?.trim();
+      if (!prompt || prompt.length > 8192)
+        return reply
+          .code(400)
+          .send({ error: 'prompt must be 1-8192 characters' });
+      return reply.code(201).send(
+        taskStore.create({
+          prompt,
+          initiator: 'home-assistant-automation',
+          model: body?.model ?? null,
+          provider: null,
+          piVersion: process.env.PI_VERSION ?? null,
+          skills: [],
+        }),
+      );
+    },
   );
   app.get<{ Params: { id: string } }>(
     '/api/v1/bridge/transactions/:id',
@@ -309,13 +324,22 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
       return transaction;
     },
   );
-  app.post<{ Params: { id: string } }>(
+  app.post<{ Params: { id: string; action: string } }>(
     '/api/v1/bridge/tasks/:id/:action',
     { preHandler: requireBridgeAuth },
-    async (_request, reply) =>
-      reply
-        .code(501)
-        .send({ error: 'Mutation transactions are not enabled yet' }),
+    async (request, reply) => {
+      const state =
+        request.params.action === 'approve'
+          ? 'approved'
+          : request.params.action === 'reject'
+            ? 'rejected'
+            : request.params.action === 'cancel'
+              ? 'cancelled'
+              : null;
+      if (!state) return reply.code(404).send({ error: 'Unknown task action' });
+      const task = taskStore.transition(request.params.id, state);
+      return task ? task : reply.code(404).send({ error: 'Task not found' });
+    },
   );
   app.post(
     '/api/v1/bridge/reload-domain',
