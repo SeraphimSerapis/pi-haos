@@ -13,6 +13,7 @@ import { createApp } from './app.js';
 import type { ActivationAdapter } from './activation.js';
 import { AuditStore } from './audit-store.js';
 import { PolicyStore } from './policy-store.js';
+import { PiUpdateManager, PiUpdateSettingsStore } from '@pi-ha/pi-runtime';
 
 describe('backend health API', () => {
   let app: FastifyInstance;
@@ -169,6 +170,43 @@ describe('read-only Home Assistant context routes', () => {
       payload: { shell_access: 'maybe' },
     });
     expect(invalid.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('exposes and persists Pi update channel settings', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'pi-update-api-'));
+    const app = createApp({
+      piUpdateSettings: new PiUpdateSettingsStore(join(root, 'settings.json')),
+      piUpdateManager: new PiUpdateManager({
+        root: join(root, 'pi'),
+        bundledVersion: '0.81.1',
+      }),
+      haClient: {} as HomeAssistantClient,
+    });
+    await app.ready();
+    const initial = await app.inject({
+      method: 'GET',
+      url: '/api/v1/pi/update/status',
+    });
+    expect(initial.statusCode).toBe(200);
+    expect(initial.json().settings).toMatchObject({
+      enabled: false,
+      channel: 'pinned',
+    });
+    const updated = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/pi/update/settings',
+      payload: { enabled: true, channel: 'stable' },
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json()).toEqual({
+      enabled: true,
+      channel: 'stable',
+      lastCheck: null,
+      latest: null,
+      changelog: null,
+      compatibility: 'unknown',
+    });
     await app.close();
   });
 });

@@ -508,6 +508,14 @@ async function renderSettings(): Promise<void> {
       installed: string[];
       rollback: string | null;
       updateInProgress: boolean;
+      settings: {
+        enabled: boolean;
+        channel: 'stable' | 'pinned';
+        lastCheck: string | null;
+        latest: string | null;
+        changelog: string | null;
+        compatibility: string;
+      };
     }>('/pi/update/status');
     const policy =
       await api<Record<string, 'allow' | 'ask' | 'deny'>>('/settings/policy');
@@ -517,7 +525,7 @@ async function renderSettings(): Promise<void> {
           `<label>${escapeHtml(capability)}<select name="${escapeHtml(capability)}"><option value="allow" ${decision === 'allow' ? 'selected' : ''}>Allow</option><option value="ask" ${decision === 'ask' ? 'selected' : ''}>Ask</option><option value="deny" ${decision === 'deny' ? 'selected' : ''}>Deny</option></select></label>`,
       )
       .join('');
-    content.innerHTML = `<section class="card"><h2>Pi runtime</h2><p>Active version: <code>${escapeHtml(status.active)}</code></p><p>Installed: ${escapeHtml(status.installed.join(', ') || 'none')}</p><p>Rollback: <code>${escapeHtml(status.rollback ?? 'unavailable')}</code></p><p class="muted">Updates are integrity-checked and only activate while sessions and transactions are idle.</p>${status.rollback ? '<button type="button" id="pi-rollback">Rollback</button>' : ''}<form id="pi-activate-form"><label>Activate installed version<select name="version">${status.installed.map((version) => `<option value="${escapeHtml(version)}">${escapeHtml(version)}</option>`).join('')}</select></label><button type="submit">Activate version</button><p id="pi-update-result" class="muted"></p></form></section><section class="card"><h2>Capability policy</h2><p class="muted">Backend-enforced defaults are read-only. “Ask” is recorded as requiring an approval path; it never silently grants authority.</p><form id="policy-form"><div class="grid">${policyRows}</div><button type="submit">Save policy</button><p id="policy-result" class="muted"></p></form></section>`;
+    content.innerHTML = `<section class="card"><h2>Pi runtime</h2><p>Active version: <code>${escapeHtml(status.active)}</code></p><p>Installed: ${escapeHtml(status.installed.join(', ') || 'none')}</p><p>Rollback: <code>${escapeHtml(status.rollback ?? 'unavailable')}</code></p><p>Latest available: <code>${escapeHtml(status.settings.latest ?? 'not checked')}</code> · compatibility: ${escapeHtml(status.settings.compatibility)}</p><p class="muted">Last update check: ${escapeHtml(status.settings.lastCheck ?? 'never')} · ${escapeHtml(status.settings.changelog ?? 'No release notes')}</p>${status.rollback ? '<button type="button" id="pi-rollback">Rollback</button>' : ''}<form id="pi-activate-form"><label>Activate installed version<select name="version">${status.installed.map((version) => `<option value="${escapeHtml(version)}">${escapeHtml(version)}</option>`).join('')}</select></label><button type="submit">Activate version</button><p id="pi-update-result" class="muted"></p></form><form id="pi-settings-form"><label><input type="checkbox" name="enabled" ${status.settings.enabled ? 'checked' : ''} /> Enable independent Pi updates</label><label>Release channel<select name="channel"><option value="pinned" ${status.settings.channel === 'pinned' ? 'selected' : ''}>Pinned</option><option value="stable" ${status.settings.channel === 'stable' ? 'selected' : ''}>Stable</option></select></label><button type="submit">Save update settings</button></form></section><section class="card"><h2>Capability policy</h2><p class="muted">Backend-enforced defaults are read-only. “Ask” is recorded as requiring an approval path; it never silently grants authority.</p><form id="policy-form"><div class="grid">${policyRows}</div><button type="submit">Save policy</button><p id="policy-result" class="muted"></p></form></section>`;
     document
       .querySelector<HTMLButtonElement>('#pi-rollback')
       ?.addEventListener('click', async () => {
@@ -527,6 +535,28 @@ async function renderSettings(): Promise<void> {
           body: JSON.stringify({ confirm: true }),
         });
         await renderSettings();
+      });
+    document
+      .querySelector<HTMLFormElement>('#pi-settings-form')
+      ?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const form = new FormData(event.currentTarget as HTMLFormElement);
+        try {
+          await api('/pi/update/settings', {
+            method: 'PUT',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              enabled: form.get('enabled') === 'on',
+              channel: form.get('channel'),
+            }),
+          });
+          await renderSettings();
+        } catch {
+          const result =
+            document.querySelector<HTMLElement>('#pi-update-result');
+          if (result)
+            result.textContent = 'Pi update settings could not be saved.';
+        }
       });
     document
       .querySelector<HTMLFormElement>('#policy-form')

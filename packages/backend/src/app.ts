@@ -10,6 +10,7 @@ import type { SkillManifest } from '@pi-ha/skills-manager';
 import {
   RpcPiRuntime,
   PiUpdateManager,
+  PiUpdateSettingsStore,
   type PiRuntime,
   type SessionInfo,
 } from '@pi-ha/pi-runtime';
@@ -51,6 +52,7 @@ export interface AppOptions {
   piUpdateManager?: PiUpdateManager;
   policyStore?: PolicyStore;
   taskQueue?: TaskQueue;
+  piUpdateSettings?: PiUpdateSettingsStore;
 }
 
 export function createApp(options: AppOptions = {}): FastifyInstance {
@@ -139,6 +141,8 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
       bundledVersion: process.env.PI_VERSION ?? '0.81.1',
       isIdle: () => sessions.size === 0,
     });
+  const piUpdateSettings =
+    options.piUpdateSettings ?? new PiUpdateSettingsStore();
 
   app.get('/api/v1/health', async () => ({ status: 'ok' }));
   app.get('/api/v1/pairing', async () => pairing.status());
@@ -278,7 +282,29 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
   });
 
   app.get('/api/v1/pi/health', async () => piRuntime.healthCheck());
-  app.get('/api/v1/pi/update/status', async () => piUpdateManager.status());
+  app.get('/api/v1/pi/update/status', async () => ({
+    ...(await piUpdateManager.status()),
+    settings: piUpdateSettings.get(),
+  }));
+  app.put<{
+    Body: { enabled?: boolean; channel?: 'stable' | 'pinned' };
+  }>('/api/v1/pi/update/settings', async (request, reply) => {
+    try {
+      const settings = await piUpdateSettings.update(request.body ?? {});
+      audit({
+        action: 'pi.update.settings',
+        initiator: 'frontend',
+        decision: 'approved',
+        details: { settings },
+      });
+      return settings;
+    } catch (error) {
+      return reply.code(400).send({
+        error:
+          error instanceof Error ? error.message : 'Invalid Pi update settings',
+      });
+    }
+  });
   app.post<{ Body: { version?: string; confirm?: boolean } }>(
     '/api/v1/pi/update/activate',
     async (request, reply) => {
