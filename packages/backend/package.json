@@ -16,7 +16,8 @@
     "@pi-ha/shared": "workspace:*",
     "@pi-ha/skills-manager": "workspace:*",
     "@pi-ha/transaction-engine": "workspace:*",
-    "fastify": "^5.4.0"
+    "fastify": "^5.4.0",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

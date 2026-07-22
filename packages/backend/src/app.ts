@@ -16,6 +16,7 @@ import { PairingManager } from './pairing.js';
 import { TransactionStore } from './transaction-store.js';
 import { TaskStore } from './task-store.js';
 import { scanWorkspace } from './workspace-scanner.js';
+import { validateYamlTransaction } from './transaction-validation.js';
 
 const appVersion = process.env.APP_VERSION ?? '0.1.0';
 
@@ -457,6 +458,15 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
         transactionId: transaction.id,
       });
       return transaction;
+    },
+  );
+  app.post<{ Params: { id: string } }>(
+    '/api/v1/transactions/:id/validate',
+    async (request, reply) => {
+      const transaction = transactionStore.get(request.params.id);
+      if (!transaction)
+        return reply.code(404).send({ error: 'Transaction not found' });
+      return transactionStore.update(validateYamlTransaction(transaction));
     },
   );
 

@@ -56,6 +56,12 @@ export class TransactionStore {
     return approved;
   }
 
+  update(transaction: ReviewTransaction): ReviewTransaction {
+    const parsed = reviewTransactionSchema.parse(transaction);
+    this.transactions.set(parsed.id, parsed);
+    return parsed;
+  }
+
   getApproved(id: string): ApprovedTransaction | undefined {
     const transaction = this.transactions.get(id);
     if (
