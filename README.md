@@ -35,3 +35,5 @@ Home Assistant Ingress and maps the live configuration read-only at
 
 See `docs/architecture.md`, `docs/security-model.md`, and
 `docs/transaction-model.md` for the design boundaries.
+Model provider and default-selection behavior is described in
+`docs/models.md`.
