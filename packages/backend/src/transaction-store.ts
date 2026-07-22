@@ -23,4 +23,10 @@ export class TransactionStore {
     if (transaction.validation.status !== 'passed') return undefined;
     return approvedTransactionSchema.parse(transaction);
   }
+
+  list(): ApprovedTransaction[] {
+    return [...this.transactions.values()].map((transaction) =>
+      approvedTransactionSchema.parse(transaction),
+    );
+  }
 }

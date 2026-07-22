@@ -126,6 +126,7 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
   app.get('/api/v1/context/check-config', async () => haClient.checkConfig());
 
   app.get('/api/v1/pi/health', async () => piRuntime.healthCheck());
+  app.get('/api/v1/transactions', async () => transactionStore.list());
   app.post<{ Body: { model?: { provider: string; modelId: string } } }>(
     '/api/v1/chat/sessions',
     async (request) => {

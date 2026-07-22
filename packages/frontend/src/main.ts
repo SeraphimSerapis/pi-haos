@@ -49,6 +49,10 @@ function renderSection(section: string): void {
     void renderSkills();
     return;
   }
+  if (section === 'changes' || section === 'tasks') {
+    void renderTransactions(section);
+    return;
+  }
   content.innerHTML = `<section class="card"><h2>${escapeHtml(section[0]?.toUpperCase() + section.slice(1))}</h2><p class="muted">This section is scaffolded for the staged, auditable workflow.</p></section>`;
   if (section === 'chat') void renderChat();
 }
@@ -211,6 +215,33 @@ async function renderSkills(): Promise<void> {
   } catch {
     content.innerHTML =
       '<section class="card"><p>Could not load skills.</p></section>';
+  }
+}
+
+async function renderTransactions(section: string): Promise<void> {
+  if (!content) return;
+  content.innerHTML =
+    '<section class="card"><p>Loading transaction history…</p></section>';
+  try {
+    const transactions = await api<
+      Array<{
+        id: string;
+        state: string;
+        diffHash: string;
+        files: Array<{ path: string; content: string }>;
+        validation: { status: string; errors: string[] };
+        createdAt: string;
+        approvedAt: string;
+      }>
+    >('/transactions');
+    if (!transactions.length) {
+      content.innerHTML = `<section class="card"><h2>${escapeHtml(section[0]?.toUpperCase() + section.slice(1))}</h2><p class="muted">No staged transactions are available.</p></section>`;
+      return;
+    }
+    content.innerHTML = `<section class="grid">${transactions.map((transaction) => `<article class="card"><h2><code>${escapeHtml(transaction.id)}</code></h2><p>${escapeHtml(transaction.state)} · validation: ${escapeHtml(transaction.validation.status)}</p><p class="muted">${escapeHtml(transaction.files.map((file) => file.path).join(', '))}</p><details><summary>Diff hash</summary><code>${escapeHtml(transaction.diffHash)}</code></details>${transaction.validation.errors.length ? `<pre>${escapeHtml(transaction.validation.errors.join('\\n'))}</pre>` : ''}</article>`).join('')}</section>`;
+  } catch {
+    content.innerHTML =
+      '<section class="card"><p>Could not load transaction history.</p></section>';
   }
 }
 

@@ -14,6 +14,29 @@ DENIED_DIRECTORIES = {".storage", ".cloud"}
 DENIED_SUFFIXES = (".db", ".db-shm", ".db-wal", ".log")
 
 
+def infer_activation_plan(paths: list[str]) -> dict[str, Any]:
+    """Describe activation likely needed after files are applied.
+
+    This is advisory only: the integration never reloads or restarts as part of
+    applying a transaction. A user must explicitly invoke the separate reload
+    service after reviewing this plan.
+    """
+    normalized = [validate_path(path) for path in paths]
+    if any(path.startswith("custom_components/") for path in normalized):
+        return {"action": "restart", "reason": "Custom integrations require a Home Assistant restart", "requiresApproval": True}
+    if any(path == "configuration.yaml" or path.startswith("packages/") for path in normalized):
+        return {"action": "restart", "reason": "Core configuration or packages may require a restart", "requiresApproval": True}
+    reloads: list[tuple[str, str]] = [
+        ("automations.yaml", "automation"),
+        ("scripts.yaml", "script"),
+        ("scenes.yaml", "scene"),
+    ]
+    for file_name, domain in reloads:
+        if file_name in normalized:
+            return {"action": "reload", "domain": domain, "reason": f"{file_name} is activated by reloading the {domain} domain", "requiresApproval": True}
+    return {"action": "none", "reason": "No automatic activation action was inferred", "requiresApproval": False}
+
+
 class TransactionApplyError(Exception):
     """Raised when an approved transaction cannot be applied safely."""
 
@@ -30,6 +53,7 @@ def apply_approved_transaction(
     root = Path(config_root).resolve()
     snapshots: dict[Path, bytes | None] = {}
     targets: list[tuple[Path, bytes]] = []
+    changed_paths: list[str] = []
     for item in files:
         if not isinstance(item, dict) or item.get("approved") is not True:
             raise TransactionApplyError("Transaction contains an unapproved file")
@@ -43,6 +67,7 @@ def apply_approved_transaction(
             raise TransactionApplyError(f"File content is not text: {relative}")
         snapshots[target] = current
         targets.append((target, content.encode("utf-8")))
+        changed_paths.append(relative)
     try:
         for target, content in targets:
             atomic_write(target, content)
@@ -55,7 +80,12 @@ def apply_approved_transaction(
             else:
                 atomic_write(target, original)
         raise TransactionApplyError("Transaction failed and was rolled back") from error
-    return {"transactionId": transaction.get("id"), "status": "completed", "filesApplied": len(targets)}
+    return {
+        "transactionId": transaction.get("id"),
+        "status": "completed",
+        "filesApplied": len(targets),
+        "activation": infer_activation_plan(changed_paths),
+    }
 
 
 def validate_path(relative: str) -> str:
