@@ -13,7 +13,11 @@ import { createApp } from './app.js';
 import type { ActivationAdapter } from './activation.js';
 import { AuditStore } from './audit-store.js';
 import { PolicyStore } from './policy-store.js';
-import { PiUpdateManager, PiUpdateSettingsStore } from '@pi-ha/pi-runtime';
+import {
+  PiReleaseCatalog,
+  PiUpdateManager,
+  PiUpdateSettingsStore,
+} from '@pi-ha/pi-runtime';
 
 describe('backend health API', () => {
   let app: FastifyInstance;
@@ -207,6 +211,51 @@ describe('read-only Home Assistant context routes', () => {
       changelog: null,
       compatibility: 'unknown',
     });
+    await app.close();
+  });
+
+  it('checks the configured release catalog and persists metadata', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'pi-release-api-'));
+    const app = createApp({
+      piUpdateSettings: new PiUpdateSettingsStore(join(root, 'settings.json')),
+      piUpdateManager: new PiUpdateManager({
+        root: join(root, 'pi'),
+        bundledVersion: '0.81.1',
+      }),
+      piReleaseCatalog: new PiReleaseCatalog({
+        packageName: 'pi-agent',
+        registryUrl: 'https://registry.example.test/pi-agent',
+        fetchImpl: async () =>
+          new Response(
+            JSON.stringify({
+              'dist-tags': { latest: '0.82.0' },
+              versions: {
+                '0.82.0': {
+                  description: 'Release notes',
+                  dist: {
+                    tarball: 'https://registry.example.test/pi-agent.tgz',
+                    integrity: 'sha512-YWJjZA==',
+                  },
+                },
+              },
+            }),
+          ),
+      }),
+      haClient: {} as HomeAssistantClient,
+    });
+    await app.ready();
+    await app.inject({
+      method: 'PUT',
+      url: '/api/v1/pi/update/settings',
+      payload: { channel: 'stable' },
+    });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/pi/update/check',
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().release).toMatchObject({ version: '0.82.0' });
+    expect(response.json().settings.latest).toBe('0.82.0');
     await app.close();
   });
 });

@@ -11,6 +11,7 @@ import {
   RpcPiRuntime,
   PiUpdateManager,
   PiUpdateSettingsStore,
+  PiReleaseCatalog,
   type PiRuntime,
   type SessionInfo,
 } from '@pi-ha/pi-runtime';
@@ -53,6 +54,7 @@ export interface AppOptions {
   policyStore?: PolicyStore;
   taskQueue?: TaskQueue;
   piUpdateSettings?: PiUpdateSettingsStore;
+  piReleaseCatalog?: PiReleaseCatalog;
 }
 
 export function createApp(options: AppOptions = {}): FastifyInstance {
@@ -143,6 +145,7 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
     });
   const piUpdateSettings =
     options.piUpdateSettings ?? new PiUpdateSettingsStore();
+  const piReleaseCatalog = options.piReleaseCatalog ?? new PiReleaseCatalog();
 
   app.get('/api/v1/health', async () => ({ status: 'ok' }));
   app.get('/api/v1/pairing', async () => pairing.status());
@@ -305,6 +308,40 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
       });
     }
   });
+  app.post('/api/v1/pi/update/check', async (request, reply) => {
+    const settings = piUpdateSettings.get();
+    if (settings.channel === 'pinned') {
+      const updated = await piUpdateSettings.recordCheck({
+        latest: null,
+        changelog: 'Pinned channel; bundled runtime updates come with the app.',
+        compatibility: 'compatible',
+      });
+      return { release: null, settings: updated };
+    }
+    try {
+      const release = await piReleaseCatalog.check(settings.channel);
+      const updated = await piUpdateSettings.recordCheck({
+        latest: release?.version ?? null,
+        changelog: release?.description ?? null,
+        compatibility: release ? 'unknown' : 'unknown',
+      });
+      audit({
+        action: 'pi.update.check',
+        initiator: 'frontend',
+        decision: 'allowed',
+        details: {
+          channel: settings.channel,
+          release: release?.version ?? null,
+        },
+      });
+      return { release, settings: updated };
+    } catch (error) {
+      return reply.code(502).send({
+        error:
+          error instanceof Error ? error.message : 'Pi release check failed',
+      });
+    }
+  });
   app.post<{ Body: { version?: string; confirm?: boolean } }>(
     '/api/v1/pi/update/activate',
     async (request, reply) => {
@@ -314,6 +351,10 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
           .send({ error: 'Explicit Pi activation confirmation is required' });
       if (!request.body.version)
         return reply.code(400).send({ error: 'version is required' });
+      if (!piUpdateSettings.get().enabled)
+        return reply
+          .code(403)
+          .send({ error: 'Independent Pi updates are disabled' });
       try {
         const status = await piUpdateManager.activate(request.body.version);
         audit({
@@ -337,6 +378,10 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
       return reply
         .code(400)
         .send({ error: 'Explicit Pi rollback confirmation is required' });
+    if (!piUpdateSettings.get().enabled)
+      return reply
+        .code(403)
+        .send({ error: 'Independent Pi updates are disabled' });
     try {
       const status = await piUpdateManager.rollback();
       audit({

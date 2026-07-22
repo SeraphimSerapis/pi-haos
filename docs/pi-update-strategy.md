@@ -11,5 +11,8 @@ rollback; failed health checks automatically restore it. The App persists
 `stable`/`pinned` channel selection, enablement, last-check metadata, latest
 version, compatibility, and release notes under `/data/pi`. Independent
 updates default to disabled and unattended updates are out of scope for the
-MVP; remote release discovery is intentionally a separate adapter from the
-integrity-checked staging path.
+MVP. The backend now provides an explicit, read-only stable-channel catalog
+check against npm metadata. It accepts only HTTPS tarballs from the configured
+registry host and valid SHA-512 integrity metadata; it does not download,
+install, or execute a release. Installation remains a separate reviewed step
+through `PiUpdateManager`.
