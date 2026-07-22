@@ -22,6 +22,7 @@ import {
   inferActivationPlan,
   type ActivationAdapter,
 } from './activation.js';
+import { AuditStore, type AuditEventInput } from './audit-store.js';
 
 const appVersion = process.env.APP_VERSION ?? '0.1.0';
 
@@ -36,6 +37,7 @@ export interface AppOptions {
   transactionStore?: TransactionStore;
   activationAdapter?: ActivationAdapter;
   taskStore?: TaskStore;
+  auditStore?: AuditStore;
 }
 
 export function createApp(options: AppOptions = {}): FastifyInstance {
@@ -91,6 +93,21 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
           ? ':memory:'
           : join(process.env.DATA_DIR ?? '/data', 'database', 'tasks.sqlite')),
     );
+  const auditStore =
+    options.auditStore ??
+    new AuditStore(
+      process.env.AUDIT_DATABASE ??
+        (process.env.NODE_ENV === 'test' || process.env.VITEST === 'true'
+          ? ':memory:'
+          : join(process.env.DATA_DIR ?? '/data', 'database', 'audit.sqlite')),
+    );
+  const audit = (event: AuditEventInput): void => {
+    try {
+      auditStore.record(event);
+    } catch {
+      // Audit failure must not widen authority or block a safe read operation.
+    }
+  };
 
   app.get('/api/v1/health', async () => ({ status: 'ok' }));
   app.get('/api/v1/pairing', async () => pairing.status());
@@ -158,6 +175,10 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
 
   app.get('/api/v1/pi/health', async () => piRuntime.healthCheck());
   app.get('/api/v1/transactions', async () => transactionStore.list());
+  app.get<{ Querystring: { limit?: string } }>(
+    '/api/v1/audit',
+    async (request) => auditStore.list(Number(request.query.limit ?? 100)),
+  );
   app.get('/api/v1/tasks', async () => taskStore.list());
   app.get<{ Params: { id: string } }>(
     '/api/v1/tasks/:id',
@@ -189,16 +210,24 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
       return reply
         .code(400)
         .send({ error: 'skills must be a bounded string array' });
-    return reply.code(201).send(
-      taskStore.create({
-        prompt,
-        initiator: request.body?.initiator ?? 'frontend',
-        model: request.body?.model ?? null,
-        provider: request.body?.provider ?? null,
-        piVersion: process.env.PI_VERSION ?? null,
-        skills,
-      }),
-    );
+    const task = taskStore.create({
+      prompt,
+      initiator: request.body?.initiator ?? 'frontend',
+      model: request.body?.model ?? null,
+      provider: request.body?.provider ?? null,
+      piVersion: process.env.PI_VERSION ?? null,
+      skills,
+    });
+    audit({
+      action: 'task.create',
+      initiator: task.initiator,
+      taskId: task.id,
+      model: task.model ?? undefined,
+      provider: task.provider ?? undefined,
+      piVersion: task.piVersion ?? undefined,
+      details: { prompt: task.prompt, skills: task.skills },
+    });
+    return reply.code(201).send(task);
   });
   app.post<{ Params: { id: string; action: string } }>(
     '/api/v1/tasks/:id/:action',
@@ -227,6 +256,14 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
           });
       }
       const task = taskStore.transition(request.params.id, state);
+      if (task)
+        audit({
+          action: `task.${action}`,
+          initiator: 'frontend',
+          taskId: task.id,
+          ...(task.transactionId ? { transactionId: task.transactionId } : {}),
+          details: { state: task.state },
+        });
       return task ? task : reply.code(404).send({ error: 'Task not found' });
     },
   );
@@ -334,16 +371,23 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
         return reply
           .code(400)
           .send({ error: 'prompt must be 1-8192 characters' });
-      return reply.code(201).send(
-        taskStore.create({
-          prompt,
-          initiator: 'home-assistant-automation',
-          model: body?.model ?? null,
-          provider: null,
-          piVersion: process.env.PI_VERSION ?? null,
-          skills: [],
-        }),
-      );
+      const task = taskStore.create({
+        prompt,
+        initiator: 'home-assistant-automation',
+        model: body?.model ?? null,
+        provider: null,
+        piVersion: process.env.PI_VERSION ?? null,
+        skills: [],
+      });
+      audit({
+        action: 'task.create',
+        initiator: task.initiator,
+        taskId: task.id,
+        model: task.model ?? undefined,
+        piVersion: task.piVersion ?? undefined,
+        details: { prompt: task.prompt, source: 'bridge' },
+      });
+      return reply.code(201).send(task);
     },
   );
   app.get<{ Params: { id: string } }>(
@@ -385,6 +429,14 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
           });
       }
       const task = taskStore.transition(request.params.id, state);
+      if (task)
+        audit({
+          action: `task.bridge_${request.params.action}`,
+          initiator: 'home-assistant-automation',
+          taskId: task.id,
+          ...(task.transactionId ? { transactionId: task.transactionId } : {}),
+          details: { state: task.state },
+        });
       return task ? task : reply.code(404).send({ error: 'Task not found' });
     },
   );
@@ -475,6 +527,13 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
         });
       }
       const result = await activationAdapter.activate(plan);
+      audit({
+        action: 'transaction.activate',
+        initiator: 'frontend',
+        transactionId: transaction.id,
+        decision: 'approved',
+        details: { plan },
+      });
       return { status: 'activated', plan, result };
     },
   );
@@ -495,6 +554,18 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
         });
         transactionStore.registerReview(transaction);
         taskStore.transition(task.id, 'awaiting_review', { transactionId });
+        audit({
+          action: 'transaction.stage',
+          initiator: task.initiator,
+          taskId: task.id,
+          transactionId,
+          model: task.model ?? undefined,
+          piVersion: task.piVersion ?? undefined,
+          details: {
+            files: transaction.files.map((file) => file.path),
+            diffHash: transaction.diffHash,
+          },
+        });
         return transaction;
       } catch (error) {
         return reply.code(400).send({
@@ -520,6 +591,18 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
       taskStore.transition(transaction.taskId, 'approved', {
         transactionId: transaction.id,
       });
+      audit({
+        action: 'transaction.approve',
+        initiator: 'frontend',
+        taskId: transaction.taskId,
+        transactionId: transaction.id,
+        decision: 'approved',
+        details: {
+          files: transaction.files
+            .filter((file) => file.approved)
+            .map((file) => file.path),
+        },
+      });
       return transaction;
     },
   );
@@ -529,7 +612,18 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
       const transaction = transactionStore.get(request.params.id);
       if (!transaction)
         return reply.code(404).send({ error: 'Transaction not found' });
-      return transactionStore.update(validateYamlTransaction(transaction));
+      const validated = transactionStore.update(
+        validateYamlTransaction(transaction),
+      );
+      audit({
+        action: 'transaction.validate_yaml',
+        initiator: 'frontend',
+        taskId: validated.taskId,
+        transactionId: validated.id,
+        decision: validated.validation.status,
+        details: { errors: validated.validation.errors },
+      });
+      return validated;
     },
   );
 
@@ -565,6 +659,15 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
           .code(409)
           .send({ error: 'Only newly created tasks can run' });
       taskStore.transition(task.id, 'planning');
+      audit({
+        action: 'task.run',
+        initiator: task.initiator,
+        taskId: task.id,
+        model: task.model ?? undefined,
+        provider: task.provider ?? undefined,
+        piVersion: task.piVersion ?? undefined,
+        details: { workspace: `task-${task.id}` },
+      });
       const workspace = join(sessionRoot, `task-${task.id}`);
       await mkdir(workspace, { recursive: true, mode: 0o700 });
       const sessionId = `task-${task.id}`;
@@ -589,10 +692,23 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
           events.push(event);
         }
         const updated = taskStore.transition(task.id, 'awaiting_review');
+        audit({
+          action: 'task.awaiting_review',
+          initiator: task.initiator,
+          taskId: task.id,
+          details: { eventCount: events.length },
+        });
         return { task: updated, sessionId, workspace, events };
       } catch (error) {
         const updated = taskStore.transition(task.id, 'failed', {
           error: error instanceof Error ? error.message : 'Pi task failed',
+        });
+        audit({
+          action: 'task.failed',
+          initiator: task.initiator,
+          taskId: task.id,
+          decision: 'failed',
+          details: { error: updated?.error ?? 'Pi task failed' },
         });
         return reply.code(502).send({ task: updated, error: 'Pi task failed' });
       } finally {

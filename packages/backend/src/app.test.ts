@@ -11,6 +11,7 @@ import { TransactionStore } from './transaction-store.js';
 import { TaskStore } from './task-store.js';
 import { createApp } from './app.js';
 import type { ActivationAdapter } from './activation.js';
+import { AuditStore } from './audit-store.js';
 
 describe('backend health API', () => {
   let app: FastifyInstance;
@@ -222,6 +223,30 @@ describe('staged task routes', () => {
     await app.close();
     taskStore.close();
     transactionStore.close();
+  });
+
+  it('exposes redacted audit history without credentials', async () => {
+    const auditStore = new AuditStore(':memory:');
+    const app = createApp({ auditStore, haClient: {} as HomeAssistantClient });
+    await app.ready();
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/tasks',
+      payload: { prompt: 'inspect', initiator: 'test' },
+    });
+    expect(created.statusCode).toBe(201);
+    const audit = await app.inject({
+      method: 'GET',
+      url: '/api/v1/audit?limit=10',
+    });
+    expect(audit.statusCode).toBe(200);
+    expect(
+      audit
+        .json()
+        .some((event: { action: string }) => event.action === 'task.create'),
+    ).toBe(true);
+    await app.close();
+    auditStore.close();
   });
 });
 
