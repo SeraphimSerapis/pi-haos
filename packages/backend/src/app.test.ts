@@ -86,10 +86,12 @@ describe('read-only Home Assistant context routes', () => {
 
 describe('staged task routes', () => {
   it('creates and transitions a bounded task record', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'pi-task-api-'));
     const taskStore = new TaskStore(':memory:');
     const app = createApp({
       taskStore,
       piRuntime: new MockPiRuntime(),
+      sessionRoot: root,
       haClient: {} as HomeAssistantClient,
     });
     await app.ready();
@@ -100,6 +102,11 @@ describe('staged task routes', () => {
     });
     expect(created.statusCode).toBe(201);
     const id = created.json().id as string;
+    const staged = await app.inject({
+      method: 'POST',
+      url: `/api/v1/tasks/${id}/run`,
+    });
+    expect(staged.statusCode).toBe(200);
     const approved = await app.inject({
       method: 'POST',
       url: `/api/v1/tasks/${id}/approve`,
@@ -110,6 +117,7 @@ describe('staged task routes', () => {
     expect(listed.json()).toHaveLength(1);
     await app.close();
     taskStore.close();
+    await rm(root, { recursive: true, force: true });
   });
 
   it('runs a new task in an isolated workspace and stops for review', async () => {

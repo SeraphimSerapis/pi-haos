@@ -192,6 +192,13 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
               ? 'cancelled'
               : null;
       if (!state) return reply.code(404).send({ error: 'Unknown task action' });
+      if (
+        state === 'approved' &&
+        taskStore.get(request.params.id)?.state !== 'awaiting_review'
+      )
+        return reply
+          .code(409)
+          .send({ error: 'Only tasks awaiting review can be approved' });
       const task = taskStore.transition(request.params.id, state);
       return task ? task : reply.code(404).send({ error: 'Task not found' });
     },
@@ -337,6 +344,13 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
               ? 'cancelled'
               : null;
       if (!state) return reply.code(404).send({ error: 'Unknown task action' });
+      if (
+        state === 'approved' &&
+        taskStore.get(request.params.id)?.state !== 'awaiting_review'
+      )
+        return reply
+          .code(409)
+          .send({ error: 'Only tasks awaiting review can be approved' });
       const task = taskStore.transition(request.params.id, state);
       return task ? task : reply.code(404).send({ error: 'Task not found' });
     },
@@ -437,11 +451,9 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
             taskStore.transition(task.id, 'failed', {
               error: 'Agent response exceeded the configured size limit',
             });
-            return reply
-              .code(413)
-              .send({
-                error: 'Agent response exceeded the configured size limit',
-              });
+            return reply.code(413).send({
+              error: 'Agent response exceeded the configured size limit',
+            });
           }
           events.push(event);
         }
