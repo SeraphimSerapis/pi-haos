@@ -7,7 +7,7 @@ import voluptuous as vol
 from .api import PiAgentApi
 from .const import (
     CONF_APP_URL,
-    CONF_PAIRING_CODE,
+    CONF_INTEGRATION_TOKEN,
     DOMAIN,
     EVENT_TASK_UPDATED,
     SERVICE_APPROVE_TASK,
@@ -30,7 +30,7 @@ SERVICE_SCHEMAS = {
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up the integration entry and register bounded bridge services."""
-    api = PiAgentApi(hass, entry.data[CONF_APP_URL], entry.data[CONF_PAIRING_CODE])
+    api = PiAgentApi(hass, entry.data[CONF_APP_URL], entry.data[CONF_INTEGRATION_TOKEN])
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"api": api}
 
     if not hass.services.has_service(DOMAIN, SERVICE_RUN_PROMPT):

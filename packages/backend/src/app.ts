@@ -12,6 +12,7 @@ import {
   type PiRuntime,
   type SessionInfo,
 } from '@pi-ha/pi-runtime';
+import { PairingManager } from './pairing.js';
 
 const appVersion = process.env.APP_VERSION ?? '0.1.0';
 
@@ -22,6 +23,7 @@ export interface AppOptions {
   skillsManager?: SkillsManager;
   piRuntime?: PiRuntime;
   sessionRoot?: string;
+  pairingManager?: PairingManager;
 }
 
 export function createApp(options: AppOptions = {}): FastifyInstance {
@@ -54,8 +56,26 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
   const sessions = new Map<string, SessionInfo>();
   const sessionRoot =
     options.sessionRoot ?? join(process.env.DATA_DIR ?? '/data', 'sessions');
+  const pairing = options.pairingManager ?? new PairingManager();
 
   app.get('/api/v1/health', async () => ({ status: 'ok' }));
+  app.get('/api/v1/pairing', async () => pairing.status());
+  app.post<{ Body: { pairingCode?: string } }>(
+    '/api/v1/pairing/exchange',
+    async (request, reply) => {
+      if (!request.body?.pairingCode)
+        return reply.code(400).send({ error: 'pairingCode is required' });
+      try {
+        return {
+          integrationToken: await pairing.exchange(request.body.pairingCode),
+        };
+      } catch (error) {
+        return reply.code(401).send({
+          error: error instanceof Error ? error.message : 'Pairing failed',
+        });
+      }
+    },
+  );
 
   app.get('/api/v1/status', async (): Promise<AppStatus> =>
     appStatusSchema.parse({
@@ -152,6 +172,73 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
       sessions.delete(request.params.id);
       return { status: 'closed' };
     },
+  );
+
+  const requireBridgeAuth = async (
+    request: { headers: Record<string, string | string[] | undefined> },
+    reply: { code: (status: number) => { send: (body: unknown) => unknown } },
+  ) => {
+    const header = request.headers['x-pi-integration-token'];
+    const token = Array.isArray(header) ? header[0] : header;
+    if (!token || !(await pairing.authenticate(token)))
+      return reply.code(401).send({ error: 'Bridge authentication failed' });
+  };
+  app.post<{
+    Body: { prompt?: string; model?: { provider: string; modelId: string } };
+  }>(
+    '/api/v1/bridge/run-prompt',
+    { preHandler: requireBridgeAuth },
+    async (request, reply) => {
+      const prompt = request.body?.prompt?.trim();
+      if (!prompt) return reply.code(400).send({ error: 'prompt is required' });
+      const id = randomUUID();
+      const workspace = join(sessionRoot, `bridge-${id}`);
+      await mkdir(workspace, { recursive: true, mode: 0o700 });
+      await piRuntime.startSession({
+        sessionId: id,
+        workspace,
+        ...(request.body?.model ? { model: request.body.model } : {}),
+      });
+      sessions.set(id, {
+        id,
+        workspace,
+        startedAt: new Date().toISOString(),
+        status: 'idle',
+      });
+      try {
+        const events = [];
+        for await (const event of piRuntime.sendMessage(id, prompt))
+          events.push(event);
+        return { sessionId: id, events };
+      } finally {
+        await piRuntime.closeSession(id);
+        sessions.delete(id);
+      }
+    },
+  );
+  app.post(
+    '/api/v1/bridge/tasks',
+    { preHandler: requireBridgeAuth },
+    async (_request, reply) =>
+      reply
+        .code(501)
+        .send({ error: 'Mutation transactions are not enabled yet' }),
+  );
+  app.post<{ Params: { id: string } }>(
+    '/api/v1/bridge/tasks/:id/:action',
+    { preHandler: requireBridgeAuth },
+    async (_request, reply) =>
+      reply
+        .code(501)
+        .send({ error: 'Mutation transactions are not enabled yet' }),
+  );
+  app.post(
+    '/api/v1/bridge/reload-domain',
+    { preHandler: requireBridgeAuth },
+    async (_request, reply) =>
+      reply
+        .code(501)
+        .send({ error: 'Reload approval bridge is not enabled yet' }),
   );
 
   app.get('/api/v1/models/providers', async () => modelCatalog.list());

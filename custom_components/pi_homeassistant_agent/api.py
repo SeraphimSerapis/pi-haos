@@ -18,10 +18,10 @@ class PiAgentApiError(Exception):
 class PiAgentApi:
     """Call the App's narrowly scoped companion bridge."""
 
-    def __init__(self, hass: Any, app_url: str, pairing_code: str) -> None:
+    def __init__(self, hass: Any, app_url: str, integration_token: str) -> None:
         self._hass = hass
         self._base_url = app_url.rstrip("/")
-        self._pairing_code = pairing_code
+        self._integration_token = integration_token
 
     async def run_prompt(self, prompt: str, model: str | None = None) -> dict[str, Any]:
         return await self._post("/api/v1/bridge/run-prompt", {"prompt": prompt, **({"model": model} if model else {})})
@@ -48,7 +48,7 @@ class PiAgentApi:
                 async with session.post(
                     f"{self._base_url}{path}",
                     json=payload,
-                    headers={"X-Pi-Pairing-Code": self._pairing_code},
+                    headers={"X-Pi-Integration-Token": self._integration_token},
                 ) as response:
                     body = await response.text()
                     if len(body) > MAX_RESPONSE_CHARS:
@@ -66,3 +66,26 @@ class PiAgentApi:
             raise
         except Exception as error:
             raise PiAgentApiError("Unable to reach Pi Agent App") from error
+
+
+async def async_exchange_pairing_code(hass: Any, app_url: str, pairing_code: str) -> str:
+    """Exchange the one-time App code for a config-entry token."""
+    session = async_get_clientsession(hass)
+    try:
+        async with async_timeout.timeout(20):
+            async with session.post(
+                f"{app_url.rstrip('/')}/api/v1/pairing/exchange",
+                json={"pairingCode": pairing_code},
+            ) as response:
+                body = await response.text()
+                if response.status >= 400:
+                    raise PiAgentApiError("Pairing code was rejected")
+                value = json.loads(body) if body else {}
+                token = value.get("integrationToken") if isinstance(value, dict) else None
+                if not isinstance(token, str) or not token:
+                    raise PiAgentApiError("Pairing response did not contain a token")
+                return token
+    except PiAgentApiError:
+        raise
+    except Exception as error:
+        raise PiAgentApiError("Unable to reach Pi Agent App") from error

@@ -1,5 +1,8 @@
 {
   "config": {
+    "error": {
+      "pairing_failed": "The App rejected the pairing code or could not be reached."
+    },
     "step": {
       "user": {
         "title": "Pair Pi Agent",

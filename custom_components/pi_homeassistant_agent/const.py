@@ -3,6 +3,7 @@
 DOMAIN = "pi_homeassistant_agent"
 CONF_APP_URL = "app_url"
 CONF_PAIRING_CODE = "pairing_code"
+CONF_INTEGRATION_TOKEN = "integration_token"
 MAX_RESPONSE_CHARS = 16_384
 
 SERVICE_RUN_PROMPT = "run_prompt"
