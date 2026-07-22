@@ -202,7 +202,7 @@ async function renderSkills(): Promise<void> {
         content: string;
       }>
     >('/skills');
-    content.innerHTML = `<section class="grid">${skills.length ? skills.map(({ manifest, content: skillContent }) => `<article class="card"><h2>${escapeHtml(manifest.name)}</h2><p class="muted"><code>${escapeHtml(manifest.id)}</code> · v${escapeHtml(manifest.version)} · ${escapeHtml(manifest.source)}</p><p>${escapeHtml(manifest.description)}</p><p>Permissions: ${manifest.permissions.map(escapeHtml).join(', ') || 'none'}</p><button type="button" data-skill-source="${escapeHtml(manifest.source)}" data-skill-id="${escapeHtml(manifest.id)}" data-skill-enabled="${!manifest.enabled}">${manifest.enabled ? 'Disable' : 'Enable'}</button>${manifest.source !== 'bundled' ? ` <button type="button" data-skill-edit="${escapeHtml(manifest.id)}">Edit</button> <button type="button" data-skill-export="${escapeHtml(manifest.id)}">Export</button><textarea hidden data-skill-content="${escapeHtml(manifest.id)}">${escapeHtml(skillContent)}</textarea>` : ''}</article>`).join('') : '<article class="card"><p>No skills installed.</p></article>'}</section><section class="card"><h2>Create or edit a user skill</h2><form id="skill-form"><div class="grid"><label>ID<input name="id" required pattern="[a-z0-9][a-z0-9-]{1,63}" maxlength="64" /></label><label>Name<input name="name" required maxlength="128" /></label><label>Version<input name="version" required value="1.0.0" pattern="[0-9]+\\.[0-9]+\\.[0-9]+" /></label><label>Description<input name="description" required maxlength="512" /></label><label>Permissions<input name="permissions" placeholder="read_config, read_entities" /></label></div><label>Skill content<textarea name="content" rows="14" required placeholder="# Instructions for Pi\n"></textarea></label><button type="submit">Save user skill</button><label>Import exported skill<input id="skill-import" type="file" accept="application/json" /></label><p id="skill-result" class="muted"></p></form></section>`;
+    content.innerHTML = `<section class="grid">${skills.length ? skills.map(({ manifest, content: skillContent }) => `<article class="card"><h2>${escapeHtml(manifest.name)}</h2><p class="muted"><code>${escapeHtml(manifest.id)}</code> · v${escapeHtml(manifest.version)} · ${escapeHtml(manifest.source)}</p><p>${escapeHtml(manifest.description)}</p><p>Permissions: ${manifest.permissions.map(escapeHtml).join(', ') || 'none'}</p><button type="button" data-skill-source="${escapeHtml(manifest.source)}" data-skill-id="${escapeHtml(manifest.id)}" data-skill-enabled="${!manifest.enabled}">${manifest.enabled ? 'Disable' : 'Enable'}</button>${manifest.source !== 'bundled' ? ` <button type="button" data-skill-edit="${escapeHtml(manifest.id)}">Edit</button> <button type="button" data-skill-export="${escapeHtml(manifest.id)}">Export</button> <button type="button" data-skill-remove="${escapeHtml(manifest.id)}" data-skill-remove-source="${escapeHtml(manifest.source)}">Remove</button><textarea hidden data-skill-content="${escapeHtml(manifest.id)}">${escapeHtml(skillContent)}</textarea>` : ''}</article>`).join('') : '<article class="card"><p>No skills installed.</p></article>'}</section><section class="card"><h2>Create or edit a user skill</h2><form id="skill-form"><div class="grid"><label>ID<input name="id" required pattern="[a-z0-9][a-z0-9-]{1,63}" maxlength="64" /></label><label>Name<input name="name" required maxlength="128" /></label><label>Version<input name="version" required value="1.0.0" pattern="[0-9]+\\.[0-9]+\\.[0-9]+" /></label><label>Description<input name="description" required maxlength="512" /></label><label>Permissions<input name="permissions" placeholder="read_config, read_entities" /></label></div><label>Skill content<textarea name="content" rows="14" required placeholder="# Instructions for Pi\n"></textarea></label><button type="submit">Save user skill</button><label>Import exported skill<input id="skill-import" type="file" accept="application/json" /></label><p id="skill-result" class="muted"></p></form></section>`;
     document
       .querySelectorAll<HTMLButtonElement>('[data-skill-id]')
       .forEach((button) =>
@@ -240,6 +240,18 @@ async function renderSkills(): Promise<void> {
             if (field) field.value = String(value ?? '');
           }
           form.scrollIntoView({ behavior: 'smooth' });
+        }),
+      );
+    document
+      .querySelectorAll<HTMLButtonElement>('[data-skill-remove]')
+      .forEach((button) =>
+        button.addEventListener('click', async () => {
+          if (!window.confirm('Remove this user skill?')) return;
+          await api(
+            `/skills/${encodeURIComponent(button.dataset.skillRemoveSource ?? 'user')}/${encodeURIComponent(button.dataset.skillRemove ?? '')}`,
+            { method: 'DELETE' },
+          );
+          await renderSkills();
         }),
       );
     document
