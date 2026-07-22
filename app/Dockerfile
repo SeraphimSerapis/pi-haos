@@ -1,22 +1,21 @@
+# syntax=docker/dockerfile:1.7
+
 FROM node:24-bookworm-slim AS build
 WORKDIR /src
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json .prettierrc.json ./
-COPY packages ./packages
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential linux-libc-dev \
   && rm -rf /var/lib/apt/lists/* \
-  && corepack enable \
-  && for attempt in 1 2 3; do \
-    if pnpm install --frozen-lockfile; then exit 0; fi; \
-    echo "pnpm install attempt ${attempt} failed; retrying" >&2; \
-    sleep $((attempt * 5)); \
-  done \
-  && exit 1
+  && corepack enable
+RUN --mount=type=cache,id=pi-haos-npm-cache,target=/root/.npm \
+  npm install --prefix /src/pi --ignore-scripts --omit=dev \
+    @earendil-works/pi-coding-agent@0.81.1 \
+  && test "$(/src/pi/node_modules/.bin/pi --version)" = "0.81.1"
+COPY packages ./packages
+RUN --mount=type=cache,id=pi-haos-pnpm-store,target=/root/.local/share/pnpm/store \
+  pnpm install --frozen-lockfile
 RUN pnpm build
 RUN pnpm deploy --legacy --filter @pi-ha/backend --prod /out
 RUN gcc -O2 -Wall -Wextra -o /src/pi-sandbox packages/pi-runtime/src/pi-sandbox.c
-RUN npm install --prefix /src/pi --ignore-scripts --omit=dev \
-  @earendil-works/pi-coding-agent@0.81.1
-RUN test "$(/src/pi/node_modules/.bin/pi --version)" = "0.81.1"
 
 FROM node:24-bookworm-slim
 ENV NODE_ENV=production PORT=8099 HOST=0.0.0.0 FRONTEND_DIST=/app/frontend/dist \
