@@ -35,6 +35,7 @@ import {
 import { PolicyStore } from './policy-store.js';
 import { KeyedMutex } from './concurrency.js';
 import { TaskQueue, TaskQueueFullError } from './task-queue.js';
+import { ModelSettingsStore, type ModelSelection } from './model-settings.js';
 
 const appVersion = process.env.APP_VERSION ?? '0.1.0';
 
@@ -47,6 +48,10 @@ function parseModelSelection(
   const provider = value.slice(0, separator).trim();
   const modelId = value.slice(separator + 1).trim();
   return provider && modelId ? { provider, modelId } : undefined;
+}
+
+function formatModelSelection(selection: ModelSelection | null): string | null {
+  return selection ? `${selection.provider}:${selection.modelId}` : null;
 }
 
 export interface AppOptions {
@@ -66,6 +71,7 @@ export interface AppOptions {
   taskQueue?: TaskQueue;
   piUpdateSettings?: PiUpdateSettingsStore;
   piReleaseCatalog?: PiReleaseCatalog;
+  modelSettings?: ModelSettingsStore;
 }
 
 export function createApp(options: AppOptions = {}): FastifyInstance {
@@ -157,6 +163,7 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
   const piUpdateSettings =
     options.piUpdateSettings ?? new PiUpdateSettingsStore();
   const piReleaseCatalog = options.piReleaseCatalog ?? new PiReleaseCatalog();
+  const modelSettings = options.modelSettings ?? new ModelSettingsStore();
 
   app.get('/api/v1/health', async () => ({ status: 'ok' }));
   app.get('/api/v1/pairing', async () => pairing.status());
@@ -446,10 +453,11 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
       return reply
         .code(400)
         .send({ error: 'skills must be a bounded string array' });
+    const defaultAutomation = (await modelSettings.get()).automation;
     const task = taskStore.create({
       prompt,
       initiator: request.body?.initiator ?? 'frontend',
-      model: request.body?.model ?? null,
+      model: request.body?.model ?? formatModelSelection(defaultAutomation),
       provider: request.body?.provider ?? null,
       piVersion: process.env.PI_VERSION ?? null,
       skills,
@@ -506,6 +514,10 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
   app.post<{ Body: { model?: { provider: string; modelId: string } } }>(
     '/api/v1/chat/sessions',
     async (request) => {
+      const selectedModel =
+        request.body?.model ??
+        (await modelSettings.get()).interactive ??
+        undefined;
       const id = randomUUID();
       const workspace = join(sessionRoot, id);
       await mkdir(workspace, { recursive: true, mode: 0o700 });
@@ -515,7 +527,7 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
         workspace,
         toolToken,
         toolBrokerUrl: process.env.TOOL_BROKER_URL ?? 'http://127.0.0.1:8099',
-        ...(request.body?.model ? { model: request.body.model } : {}),
+        ...(selectedModel ? { model: selectedModel } : {}),
       });
       sessions.set(id, session);
       sessionTokens.set(id, toolToken);
@@ -659,7 +671,9 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
       const task = taskStore.create({
         prompt,
         initiator: 'home-assistant-automation',
-        model: body?.model ?? null,
+        model:
+          body?.model ??
+          formatModelSelection((await modelSettings.get()).automation),
         provider: null,
         piVersion: process.env.PI_VERSION ?? null,
         skills: [],
@@ -827,6 +841,29 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
   );
 
   app.get('/api/v1/models/providers', async () => modelCatalog.list());
+  app.get('/api/v1/models/settings', async () => modelSettings.get());
+  app.put<{
+    Body: {
+      interactive?: ModelSelection | null;
+      automation?: ModelSelection | null;
+    };
+  }>('/api/v1/models/settings', async (request, reply) => {
+    try {
+      const settings = await modelSettings.update(request.body ?? {});
+      audit({
+        action: 'models.settings.update',
+        initiator: 'frontend',
+        decision: 'approved',
+        details: { settings },
+      });
+      return settings;
+    } catch (error) {
+      return reply.code(400).send({
+        error:
+          error instanceof Error ? error.message : 'Invalid model settings',
+      });
+    }
+  });
   app.put<{ Params: { id: string }; Body: ModelProviderInput }>(
     '/api/v1/models/providers/:id',
     async (request, reply) => {

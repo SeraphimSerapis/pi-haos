@@ -168,19 +168,66 @@ async function renderModels(): Promise<void> {
   content.innerHTML =
     '<section class="card"><p>Loading model providers…</p></section>';
   try {
-    const providers = await api<
-      Array<{
-        id: string;
-        name: string;
-        kind: string;
-        endpoint: string;
-        models: string[];
-        hasApiKey: boolean;
-        enabled: boolean;
-      }>
-    >('/models/providers');
+    const [providers, settings] = await Promise.all([
+      api<
+        Array<{
+          id: string;
+          name: string;
+          kind: string;
+          endpoint: string;
+          models: string[];
+          hasApiKey: boolean;
+          enabled: boolean;
+        }>
+      >('/models/providers'),
+      api<{
+        interactive: { provider: string; modelId: string } | null;
+        automation: { provider: string; modelId: string } | null;
+      }>('/models/settings'),
+    ]);
+    const modelOptions = (
+      selected: { provider: string; modelId: string } | null,
+    ) =>
+      `<option value="">Runtime default</option>${providers
+        .filter((provider) => provider.enabled)
+        .flatMap((provider) =>
+          provider.models.map((model) => {
+            const value = `${provider.id}:${model}`;
+            return `<option value="${escapeHtml(value)}" ${selected?.provider === provider.id && selected.modelId === model ? 'selected' : ''}>${escapeHtml(`${provider.name} · ${model}`)}</option>`;
+          }),
+        )
+        .join('')}`;
     content.innerHTML = `<section class="grid">${providers.length ? providers.map((provider) => `<article class="card"><h2>${escapeHtml(provider.name)}</h2><p class="muted">${escapeHtml(provider.kind)} · ${escapeHtml(provider.endpoint)}</p><p>${provider.models.map(escapeHtml).join(', ')}</p><p>${provider.hasApiKey ? 'API key saved' : 'No API key'} · ${provider.enabled ? 'Enabled' : 'Disabled'}</p></article>`).join('') : '<article class="card"><p>No providers configured yet.</p></article>'}</section>
+      <section class="card"><h2>Default models</h2><form id="model-settings-form"><div class="grid"><label>Interactive chat<select name="interactive">${modelOptions(settings.interactive)}</select></label><label>Automation tasks<select name="automation">${modelOptions(settings.automation)}</select></label></div><button type="submit">Save default models</button><p id="model-settings-result" class="muted"></p></form></section>
       <section class="card"><h2>Add provider</h2><form id="provider-form"><div class="grid"><label>Provider ID<input name="id" required pattern="[A-Za-z0-9_-]+" placeholder="openai" /></label><label>Name<input name="name" required placeholder="OpenAI" /></label><label>Type<select name="kind"><option value="openai">OpenAI</option><option value="openai-compatible">OpenAI-compatible</option><option value="local">Local</option></select></label><label>Endpoint<input name="endpoint" type="url" required value="https://api.openai.com/v1" /></label><label>Models (comma-separated)<input name="models" required placeholder="gpt-4.1" /></label><label>API key<input name="apiKey" type="password" autocomplete="new-password" /></label></div><button type="submit">Save provider</button><p id="provider-result" class="muted"></p></form></section>`;
+    document
+      .querySelector<HTMLFormElement>('#model-settings-form')
+      ?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const form = new FormData(event.currentTarget as HTMLFormElement);
+        const parse = (value: FormDataEntryValue | null) => {
+          const selected = String(value ?? '');
+          if (!selected) return null;
+          const [provider, ...modelParts] = selected.split(':');
+          return { provider, modelId: modelParts.join(':') };
+        };
+        const result = document.querySelector<HTMLElement>(
+          '#model-settings-result',
+        );
+        try {
+          await api('/models/settings', {
+            method: 'PUT',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              interactive: parse(form.get('interactive')),
+              automation: parse(form.get('automation')),
+            }),
+          });
+          if (result) result.textContent = 'Default models saved.';
+        } catch {
+          if (result) result.textContent = 'Default models could not be saved.';
+        }
+      });
     document
       .querySelector<HTMLFormElement>('#provider-form')
       ?.addEventListener('submit', async (event) => {

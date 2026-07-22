@@ -13,6 +13,7 @@ import { createApp } from './app.js';
 import type { ActivationAdapter } from './activation.js';
 import { AuditStore } from './audit-store.js';
 import { PolicyStore } from './policy-store.js';
+import { ModelSettingsStore } from './model-settings.js';
 import {
   PiReleaseCatalog,
   PiUpdateManager,
@@ -94,6 +95,40 @@ describe('authenticated companion status', () => {
     });
     expect(denied.statusCode).toBe(401);
     await app.close();
+  });
+});
+
+describe('model settings API', () => {
+  it('persists interactive and automation defaults', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'pi-model-api-'));
+    const app = createApp({
+      modelSettings: new ModelSettingsStore(join(root, 'settings.json')),
+      haClient: {} as HomeAssistantClient,
+    });
+    await app.ready();
+    const updated = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/models/settings',
+      payload: {
+        interactive: { provider: 'openai', modelId: 'gpt-4.1' },
+        automation: { provider: 'local', modelId: 'llama3.2' },
+      },
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json().interactive).toEqual({
+      provider: 'openai',
+      modelId: 'gpt-4.1',
+    });
+    const loaded = await app.inject({
+      method: 'GET',
+      url: '/api/v1/models/settings',
+    });
+    expect(loaded.json().automation).toEqual({
+      provider: 'local',
+      modelId: 'llama3.2',
+    });
+    await app.close();
+    await rm(root, { recursive: true, force: true });
   });
 });
 
