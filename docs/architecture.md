@@ -1,7 +1,10 @@
 # Architecture
 
 The App is a local, Ingress-served control plane. The backend owns sessions,
-policy, audit records, staging, and Home Assistant API access. Pi is a
+policy, task metadata, audit records, staging, and Home Assistant API access.
+Task metadata is persisted in SQLite under `/data`; task creation and bounded
+approval actions are available to the Ingress UI and authenticated companion
+bridge. Pi is a
 supervised RPC worker and receives only narrowly scoped typed tools. The live
 `/homeassistant` mount is read-only. Approved file mutations are delegated to a
 paired `pi_homeassistant_agent` custom integration, which runs in Home
