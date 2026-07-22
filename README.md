@@ -8,11 +8,12 @@ paired companion integration owns approved writes.
 
 ## Status
 
-Milestone 1 (foundation) is in progress. The current slice provides a
-health-checked backend, an Ingress-compatible frontend shell, App packaging,
-development Compose setup, shared contracts, and CI scaffolding. Pi sessions,
-Home Assistant tools, transactions, and the companion integration are planned
-for subsequent milestones.
+Milestones 1 and 2 are complete. The repository now provides a health-checked
+backend, an Ingress-compatible frontend shell, App packaging, development
+Compose setup, shared contracts, CI scaffolding, a supervised Pi JSONL RPC
+runtime, deterministic mock sessions, capability detection, and a fail-closed
+Landlock sandbox launcher. Home Assistant tools, transactions, and the paired
+write integration are planned for subsequent milestones.
 
 ## Development
 

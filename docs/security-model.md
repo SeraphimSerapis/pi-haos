@@ -7,8 +7,8 @@ Backend code—not prompts—enforces every capability and records every decisio
 The live configuration is mounted read-only. App-private sessions, credentials,
 skills, transaction snapshots, logs, and databases are under `/data`, never
 under `/config`. Pi receives a scrubbed environment and no Supervisor token.
-Milestone 2 adds a fail-closed OS sandbox for Pi; AppArmor is an additional
-container-wide control, not a substitute for process isolation.
+The Pi runtime now launches through a fail-closed Landlock sandbox; AppArmor is
+an additional container-wide control, not a substitute for process isolation.
 
 Threats include prompt injection in configuration, malicious skills, hostile
 providers, compromised Pi packages, and malformed tool calls. Mitigations are

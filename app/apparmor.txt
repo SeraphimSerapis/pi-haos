@@ -1,12 +1,13 @@
 # Starting profile for the App container. This is intentionally conservative:
 # the live Home Assistant configuration is readable but never writable, and
 # private state is limited to the App's /data volume. The Pi child-process
-# filesystem boundary is a separate Milestone 2 control.
+# filesystem boundary is enforced by the Landlock launcher.
 profile pi_homeassistant_agent flags=(attach_disconnected,mediate_deleted) {
   #include <abstractions/base>
   network inet stream,
   network inet6 stream,
   /app/** r,
+  /app/bin/pi-sandbox ix,
   /usr/** r,
   /lib/** r,
   /lib64/** r,

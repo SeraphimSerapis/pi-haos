@@ -12,7 +12,7 @@ flowchart LR
   UI[Home Assistant Ingress UI] --> API[Fastify backend]
   API --> DB[(SQLite under /data)]
   API --> HA[HA REST/WebSocket proxy]
-  API -->|typed local IPC| PI[Pi RPC worker]
+  API -->|typed local IPC| PI[Pi RPC worker + Landlock sandbox]
   PI -->|inference proxy| Provider[Configured model provider]
   API --> Stage[Staging workspaces]
   API -->|approved manifest| Integration[Companion integration]

@@ -6,5 +6,9 @@ production App with a read-only fixture mounted at `/homeassistant`, a private
 named `/data` volume, a read-only container filesystem, dropped capabilities,
 and `no-new-privileges`.
 
-The repository currently cannot initialize `.git` in the managed workspace;
-create the Git repository in a normal writable checkout before committing.
+The repository is a normal Git checkout. Keep commits small and run all quality
+gates before pushing.
+
+The production Docker build compiles `packages/pi-runtime/src/pi-sandbox.c`
+inside the Debian builder image. The launcher requires Landlock ABI 4 and
+refuses to execute Pi when that kernel capability is unavailable.
