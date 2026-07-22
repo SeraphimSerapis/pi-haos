@@ -42,3 +42,7 @@ The companion integration routes reload and restart requests through the
 authenticated bridge. The bridge accepts only the fixed automation, script,
 scene, template, and Home Assistant restart actions; it requires explicit
 confirmation, re-validates Core configuration, and records the action.
+It also polls a bounded authenticated status endpoint and exposes diagnostic
+entities for App connectivity, Pi health/version, active sessions, queued
+tasks, last task/error, and update availability. These entities never contain
+model output or configuration contents.

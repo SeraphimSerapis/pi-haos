@@ -43,6 +43,29 @@ class PiAgentApi:
             "/api/v1/bridge/reload-domain", {"domain": domain, "confirm": True}
         )
 
+    async def get_status(self) -> dict[str, Any]:
+        """Fetch the bounded status payload used by integration sensors."""
+        session = async_get_clientsession(self._hass)
+        try:
+            async with async_timeout.timeout(20):
+                async with session.get(
+                    f"{self._base_url}/api/v1/bridge/status",
+                    headers={"X-Pi-Integration-Token": self._integration_token},
+                ) as response:
+                    body = await response.text()
+                    if len(body) > MAX_RESPONSE_CHARS:
+                        raise PiAgentApiError("App response exceeded the configured size limit")
+                    if response.status >= 400:
+                        raise PiAgentApiError(f"App bridge rejected status fetch ({response.status})")
+                    value = json.loads(body) if body else {}
+                    if not isinstance(value, dict):
+                        raise PiAgentApiError("Status response must be an object")
+                    return value
+        except PiAgentApiError:
+            raise
+        except Exception as error:
+            raise PiAgentApiError("Unable to reach Pi Agent App") from error
+
     async def get_transaction(self, transaction_id: str) -> dict[str, Any]:
         """Fetch approved staged content by ID; the App remains source of truth."""
         session = async_get_clientsession(self._hass)

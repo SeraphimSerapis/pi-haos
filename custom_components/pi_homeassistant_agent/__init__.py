@@ -1,6 +1,7 @@
 """Companion integration for the Pi Home Assistant Agent."""
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 import voluptuous as vol
 
@@ -29,12 +30,14 @@ SERVICE_SCHEMAS = {
     SERVICE_RELOAD_DOMAIN: vol.Schema({vol.Required("domain"): vol.All(str, vol.Length(min=1, max=64))}),
     SERVICE_APPLY_TRANSACTION: vol.Schema({vol.Required("transaction_id"): vol.All(str, vol.Length(min=1, max=128))}),
 }
+PLATFORMS = [Platform.SENSOR]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up the integration entry and register bounded bridge services."""
     api = PiAgentApi(hass, entry.data[CONF_APP_URL], entry.data[CONF_INTEGRATION_TOKEN])
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"api": api}
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     if not hass.services.has_service(DOMAIN, SERVICE_RUN_PROMPT):
         async def handle_service(call) -> None:
@@ -69,9 +72,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload the integration entry."""
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     data = hass.data.get(DOMAIN, {})
     data.pop(entry.entry_id, None)
     if not data:
         for service_name in SERVICE_SCHEMAS:
             hass.services.async_remove(DOMAIN, service_name)
-    return True
+    return unloaded

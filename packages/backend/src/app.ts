@@ -559,6 +559,43 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
     if (!token || !(await pairing.authenticate(token)))
       return reply.code(401).send({ error: 'Bridge authentication failed' });
   };
+  app.get(
+    '/api/v1/bridge/status',
+    { preHandler: requireBridgeAuth },
+    async () => {
+      const tasks = taskStore.list();
+      const queue = taskQueue.status();
+      const pi = await piRuntime.healthCheck();
+      const update = await piUpdateManager.status();
+      const settings = piUpdateSettings.get();
+      const lastTask = tasks[0] ?? null;
+      return {
+        status: 'ok',
+        appVersion,
+        pi: { healthy: pi.healthy, version: pi.version?.version ?? null },
+        model: null,
+        activeSessions: sessions.size,
+        pendingTasks: queue.queued,
+        activeTasks: queue.active,
+        lastTask: lastTask
+          ? {
+              id: lastTask.id,
+              state: lastTask.state,
+              updatedAt: lastTask.updatedAt,
+            }
+          : null,
+        lastError: lastTask?.error ?? pi.error ?? null,
+        update: {
+          enabled: settings.enabled,
+          channel: settings.channel,
+          latest: settings.latest,
+          installed: update.active,
+          available:
+            settings.latest !== null && settings.latest !== update.active,
+        },
+      };
+    },
+  );
   app.post<{
     Body: { prompt?: string; model?: { provider: string; modelId: string } };
   }>(

@@ -51,6 +51,52 @@ describe('backend health API', () => {
   });
 });
 
+describe('authenticated companion status', () => {
+  it('returns bounded runtime and queue status', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'pi-bridge-status-'));
+    const pairing = new PairingManager(join(root, 'pairing.json'));
+    const app = createApp({
+      pairingManager: pairing,
+      piRuntime: new MockPiRuntime(),
+      piUpdateManager: new PiUpdateManager({
+        root: join(root, 'pi'),
+        bundledVersion: '0.81.1',
+      }),
+      taskStore: new TaskStore(':memory:'),
+      haClient: {} as HomeAssistantClient,
+    });
+    await app.ready();
+    const code = (
+      await app.inject({ method: 'GET', url: '/api/v1/pairing' })
+    ).json().pairingCode as string;
+    const token = (
+      await app.inject({
+        method: 'POST',
+        url: '/api/v1/pairing/exchange',
+        payload: { pairingCode: code },
+      })
+    ).json().integrationToken as string;
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/bridge/status',
+      headers: { 'x-pi-integration-token': token },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      status: 'ok',
+      activeSessions: 0,
+      pendingTasks: 0,
+      update: { installed: '0.81.1', available: false },
+    });
+    const denied = await app.inject({
+      method: 'GET',
+      url: '/api/v1/bridge/status',
+    });
+    expect(denied.statusCode).toBe(401);
+    await app.close();
+  });
+});
+
 describe('read-only Home Assistant context routes', () => {
   it('routes structured reads through the backend client', async () => {
     const client = {
