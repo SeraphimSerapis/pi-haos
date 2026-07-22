@@ -265,7 +265,7 @@ async function renderTasks(): Promise<void> {
         error: string | null;
       }>
     >('/tasks');
-    content.innerHTML = `<section class="card"><h2>Start staged task</h2><form id="task-form"><label>Prompt<textarea name="prompt" rows="4" required maxlength="8192" placeholder="Ask Pi to propose a safe configuration change…"></textarea></label><button type="submit">Create task</button><p id="task-result" class="muted"></p></form></section><section class="grid">${tasks.length ? tasks.map((task) => `<article class="card"><h2><code>${escapeHtml(task.id.slice(0, 8))}</code></h2><p>${escapeHtml(task.state)} · ${escapeHtml(task.initiator)}</p><p>${escapeHtml(task.prompt)}</p><p class="muted">${escapeHtml(task.model ?? 'default model')} · ${escapeHtml(task.skills.join(', ') || 'no skills')}</p>${task.error ? `<pre>${escapeHtml(task.error)}</pre>` : ''}${['created', 'awaiting_review'].includes(task.state) ? `<button type="button" data-task-action="approve" data-task-id="${escapeHtml(task.id)}">Approve</button> <button type="button" data-task-action="reject" data-task-id="${escapeHtml(task.id)}">Reject</button>` : ''}</article>`).join('') : '<article class="card"><p class="muted">No tasks recorded.</p></article>'}</section>`;
+    content.innerHTML = `<section class="card"><h2>Start staged task</h2><form id="task-form"><label>Prompt<textarea name="prompt" rows="4" required maxlength="8192" placeholder="Ask Pi to propose a safe configuration change…"></textarea></label><button type="submit">Create task</button><p id="task-result" class="muted"></p></form></section><section class="grid">${tasks.length ? tasks.map((task) => `<article class="card"><h2><code>${escapeHtml(task.id.slice(0, 8))}</code></h2><p>${escapeHtml(task.state)} · ${escapeHtml(task.initiator)}</p><p>${escapeHtml(task.prompt)}</p><p class="muted">${escapeHtml(task.model ?? 'default model')} · ${escapeHtml(task.skills.join(', ') || 'no skills')}</p>${task.error ? `<pre>${escapeHtml(task.error)}</pre>` : ''}${task.state === 'created' ? `<button type="button" data-task-run="${escapeHtml(task.id)}">Run in staging</button>` : ''}${task.state === 'awaiting_review' ? `<button type="button" data-task-action="approve" data-task-id="${escapeHtml(task.id)}">Approve</button> <button type="button" data-task-action="reject" data-task-id="${escapeHtml(task.id)}">Reject</button>` : ''}</article>`).join('') : '<article class="card"><p class="muted">No tasks recorded.</p></article>'}</section>`;
     document
       .querySelector<HTMLFormElement>('#task-form')
       ?.addEventListener('submit', async (event) => {
@@ -292,6 +292,18 @@ async function renderTasks(): Promise<void> {
         button.addEventListener('click', async () => {
           await api(
             `/tasks/${encodeURIComponent(button.dataset.taskId ?? '')}/${button.dataset.taskAction}`,
+            { method: 'POST' },
+          );
+          await renderTasks();
+        }),
+      );
+    document
+      .querySelectorAll<HTMLButtonElement>('[data-task-run]')
+      .forEach((button) =>
+        button.addEventListener('click', async () => {
+          button.disabled = true;
+          await api(
+            `/tasks/${encodeURIComponent(button.dataset.taskRun ?? '')}/run`,
             { method: 'POST' },
           );
           await renderTasks();

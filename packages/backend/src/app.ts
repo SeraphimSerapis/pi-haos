@@ -410,6 +410,53 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
       });
     }
   });
+  app.post<{ Params: { id: string } }>(
+    '/api/v1/tasks/:id/run',
+    async (request, reply) => {
+      const task = taskStore.get(request.params.id);
+      if (!task) return reply.code(404).send({ error: 'Task not found' });
+      if (task.state !== 'created')
+        return reply
+          .code(409)
+          .send({ error: 'Only newly created tasks can run' });
+      taskStore.transition(task.id, 'planning');
+      const workspace = join(sessionRoot, `task-${task.id}`);
+      await mkdir(workspace, { recursive: true, mode: 0o700 });
+      const sessionId = `task-${task.id}`;
+      try {
+        await piRuntime.startSession({ sessionId, workspace });
+        const events = [];
+        let responseSize = 0;
+        const guardedPrompt = `Work only in the assigned staging workspace. Do not modify live Home Assistant files. Inspect and propose changes for this task; leave any proposed files in the workspace for review.\n\nUser task:\n${task.prompt}`;
+        for await (const event of piRuntime.sendMessage(
+          sessionId,
+          guardedPrompt,
+        )) {
+          responseSize += Buffer.byteLength(JSON.stringify(event), 'utf8');
+          if (responseSize > 256 * 1024) {
+            taskStore.transition(task.id, 'failed', {
+              error: 'Agent response exceeded the configured size limit',
+            });
+            return reply
+              .code(413)
+              .send({
+                error: 'Agent response exceeded the configured size limit',
+              });
+          }
+          events.push(event);
+        }
+        const updated = taskStore.transition(task.id, 'awaiting_review');
+        return { task: updated, sessionId, workspace, events };
+      } catch (error) {
+        const updated = taskStore.transition(task.id, 'failed', {
+          error: error instanceof Error ? error.message : 'Pi task failed',
+        });
+        return reply.code(502).send({ task: updated, error: 'Pi task failed' });
+      } finally {
+        await piRuntime.closeSession(sessionId).catch(() => undefined);
+      }
+    },
+  );
   app.post<{
     Params: { source: 'bundled' | 'installed' | 'user'; id: string };
     Body: { enabled?: boolean };

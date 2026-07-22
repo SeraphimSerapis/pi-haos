@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import type { HomeAssistantClient } from '@pi-ha/ha-client';
 import type { PiRuntime } from '@pi-ha/pi-runtime';
+import { MockPiRuntime } from '@pi-ha/pi-runtime';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -86,7 +87,11 @@ describe('read-only Home Assistant context routes', () => {
 describe('staged task routes', () => {
   it('creates and transitions a bounded task record', async () => {
     const taskStore = new TaskStore(':memory:');
-    const app = createApp({ taskStore, haClient: {} as HomeAssistantClient });
+    const app = createApp({
+      taskStore,
+      piRuntime: new MockPiRuntime(),
+      haClient: {} as HomeAssistantClient,
+    });
     await app.ready();
     const created = await app.inject({
       method: 'POST',
@@ -105,6 +110,37 @@ describe('staged task routes', () => {
     expect(listed.json()).toHaveLength(1);
     await app.close();
     taskStore.close();
+  });
+
+  it('runs a new task in an isolated workspace and stops for review', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'pi-task-run-'));
+    const taskStore = new TaskStore(':memory:');
+    const app = createApp({
+      taskStore,
+      piRuntime: new MockPiRuntime(),
+      sessionRoot: root,
+      haClient: {} as HomeAssistantClient,
+    });
+    await app.ready();
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/tasks',
+      payload: { prompt: 'Inspect config' },
+    });
+    const result = await app.inject({
+      method: 'POST',
+      url: `/api/v1/tasks/${created.json().id}/run`,
+    });
+    expect(result.statusCode).toBe(200);
+    expect(result.json().task.state).toBe('awaiting_review');
+    expect(
+      result
+        .json()
+        .events.some((event: { type: string }) => event.type === 'text_delta'),
+    ).toBe(true);
+    await app.close();
+    taskStore.close();
+    await rm(root, { recursive: true, force: true });
   });
 });
 
