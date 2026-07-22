@@ -37,7 +37,7 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
     appStatusSchema.parse({
       status: 'ok',
       appVersion,
-      piVersion: null,
+      piVersion: process.env.PI_VERSION ?? null,
       homeAssistantMount: 'read-only',
       integration: 'not-installed',
       timestamp: new Date().toISOString(),

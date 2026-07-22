@@ -11,5 +11,7 @@ only to its assigned workspace, runtime libraries, temporary files, and the
 configured local inference-broker port. If the required Landlock ABI or
 launcher is unavailable, the runtime refuses to start the session.
 
-The mock runtime is deterministic and is used by backend tests until a real Pi
-package and provider fixture are available.
+The image currently bundles the pinned `@earendil-works/pi-coding-agent@0.81.1`
+CLI. The mock runtime remains deterministic and is used by unit tests; the
+production backend wiring will select the bundled CLI through the runtime
+supervisor once the provider/session policy is enabled.

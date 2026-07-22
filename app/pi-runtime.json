@@ -1,0 +1,8 @@
+{
+  "package": "@earendil-works/pi-coding-agent",
+  "version": "0.81.1",
+  "registry": "https://registry.npmjs.org/",
+  "distIntegrity": "sha512-r6ovAsZOgAqbC/aU6s+/dPnv/sGZBuWyZNvi3pXjpbuX5wvp3XvGkQI7/VLvX2o9XpmpFaPUxKNym1WfkN/P8A==",
+  "nodeEngine": ">=22.19.0",
+  "installFlags": ["--ignore-scripts", "--omit=dev"]
+}

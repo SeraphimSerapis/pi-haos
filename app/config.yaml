@@ -4,11 +4,11 @@ slug: pi_homeassistant_agent
 description: >-
   An experimental, safety-first Pi agent for inspecting and reviewing Home
   Assistant configuration through a native Ingress panel.
-url: https://github.com/example/pi-homeassistant-agent
+url: https://github.com/SeraphimSerapis/pi-haos
 arch:
   - amd64
   - aarch64
-image: ghcr.io/example/pi-homeassistant-agent
+image: ghcr.io/seraphimserapis/pi-haos
 startup: application
 boot: auto
 ingress: true

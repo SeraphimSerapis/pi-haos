@@ -8,9 +8,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
 RUN pnpm build
 RUN pnpm deploy --legacy --filter @pi-ha/backend --prod /out
 RUN gcc -O2 -Wall -Wextra -o /src/pi-sandbox packages/pi-runtime/src/pi-sandbox.c
+RUN npm install --prefix /src/pi --ignore-scripts --omit=dev \
+  @earendil-works/pi-coding-agent@0.81.1
 
 FROM node:24-bookworm-slim
-ENV NODE_ENV=production PORT=8099 HOST=0.0.0.0 FRONTEND_DIST=/app/frontend/dist
+ENV NODE_ENV=production PORT=8099 HOST=0.0.0.0 FRONTEND_DIST=/app/frontend/dist \
+  PI_VERSION=0.81.1 PI_COMMAND=/opt/pi/node_modules/.bin/pi
 WORKDIR /app
 RUN useradd --system --uid 10001 --create-home --shell /usr/sbin/nologin pi-agent \
   && mkdir -p /data /homeassistant \
@@ -18,6 +21,8 @@ RUN useradd --system --uid 10001 --create-home --shell /usr/sbin/nologin pi-agen
 COPY --from=build /out ./backend
 COPY --from=build /src/packages/frontend/dist ./frontend/dist
 COPY --from=build /src/pi-sandbox ./bin/pi-sandbox
+COPY --from=build /src/pi /opt/pi
+COPY app/pi-runtime.json /app/pi-runtime.json
 COPY app/rootfs/entrypoint.sh /entrypoint.sh
 COPY app/apparmor.txt /app/apparmor.txt
 RUN chmod 0755 /entrypoint.sh
