@@ -22,6 +22,8 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      - run: python3 -m compileall -q custom_components/pi_homeassistant_agent
+      - run: python3 custom_components/pi_homeassistant_agent/transaction_apply_test.py
 
   docker:
     runs-on: ubuntu-latest

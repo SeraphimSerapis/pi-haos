@@ -2,7 +2,10 @@ import hashlib
 import tempfile
 from pathlib import Path
 
-from .transaction_apply import TransactionApplyError, apply_approved_transaction
+try:
+    from .transaction_apply import TransactionApplyError, apply_approved_transaction
+except ImportError:
+    from transaction_apply import TransactionApplyError, apply_approved_transaction
 
 
 def test_apply_and_rollback():
@@ -29,3 +32,9 @@ def test_rejects_protected_paths():
     except TransactionApplyError:
         return
     raise AssertionError("protected path was accepted")
+
+
+if __name__ == "__main__":
+    test_apply_and_rollback()
+    test_rejects_protected_paths()
+    print("transaction apply tests passed")
