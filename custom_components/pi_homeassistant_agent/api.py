@@ -39,7 +39,9 @@ class PiAgentApi:
         return await self._post(f"/api/v1/bridge/tasks/{task_id}/reject", {})
 
     async def reload_domain(self, domain: str) -> dict[str, Any]:
-        return await self._post("/api/v1/bridge/reload-domain", {"domain": domain})
+        return await self._post(
+            "/api/v1/bridge/reload-domain", {"domain": domain, "confirm": True}
+        )
 
     async def get_transaction(self, transaction_id: str) -> dict[str, Any]:
         """Fetch approved staged content by ID; the App remains source of truth."""

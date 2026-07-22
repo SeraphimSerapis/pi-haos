@@ -479,4 +479,49 @@ describe('isolated Pi chat routes', () => {
     await app.close();
     await rm(root, { recursive: true, force: true });
   });
+
+  it('provides an authenticated, allowlisted bridge activation', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'pi-bridge-activation-'));
+    const pairing = new PairingManager(join(root, 'pairing.json'));
+    const token = await pairing.exchange(
+      (await pairing.status()).pairingCode ?? '',
+    );
+    const activationAdapter: ActivationAdapter = {
+      validateCore: vi.fn(async () => ({ valid: true, errors: [] })),
+      activate: vi.fn(async (plan) => ({ plan })),
+    };
+    const app = createApp({
+      pairingManager: pairing,
+      activationAdapter,
+      sessionRoot: root,
+      haClient: {} as HomeAssistantClient,
+    });
+    await app.ready();
+    const headers = { 'x-pi-integration-token': token };
+    const missing = await app.inject({
+      method: 'POST',
+      url: '/api/v1/bridge/reload-domain',
+      headers,
+      payload: { domain: 'automation' },
+    });
+    expect(missing.statusCode).toBe(400);
+    const invalid = await app.inject({
+      method: 'POST',
+      url: '/api/v1/bridge/reload-domain',
+      headers,
+      payload: { domain: 'arbitrary', confirm: true },
+    });
+    expect(invalid.statusCode).toBe(400);
+    const activated = await app.inject({
+      method: 'POST',
+      url: '/api/v1/bridge/reload-domain',
+      headers,
+      payload: { domain: 'automation', confirm: true },
+    });
+    expect(activated.statusCode).toBe(200);
+    expect(activationAdapter.validateCore).toHaveBeenCalledOnce();
+    expect(activationAdapter.activate).toHaveBeenCalledOnce();
+    await app.close();
+    await rm(root, { recursive: true, force: true });
+  });
 });

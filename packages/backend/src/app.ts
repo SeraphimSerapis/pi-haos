@@ -21,6 +21,7 @@ import { validateYamlTransaction } from './transaction-validation.js';
 import {
   HomeAssistantActivationAdapter,
   inferActivationPlan,
+  type ActivationPlan,
   type ActivationAdapter,
 } from './activation.js';
 import { AuditStore, type AuditEventInput } from './audit-store.js';
@@ -592,13 +593,60 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
       return task ? task : reply.code(404).send({ error: 'Task not found' });
     },
   );
-  app.post(
+  app.post<{
+    Body: { domain?: string; confirm?: boolean };
+  }>(
     '/api/v1/bridge/reload-domain',
     { preHandler: requireBridgeAuth },
-    async (_request, reply) =>
-      reply
-        .code(501)
-        .send({ error: 'Reload approval bridge is not enabled yet' }),
+    async (request, reply) => {
+      const domain = request.body?.domain;
+      let activation: Exclude<ActivationPlan, { action: 'none' }> | null = null;
+      if (
+        domain === 'automation' ||
+        domain === 'script' ||
+        domain === 'scene' ||
+        domain === 'template'
+      )
+        activation = {
+          action: 'reload',
+          domain,
+          service: 'reload',
+          reason: `Explicit companion request to reload the ${domain} domain`,
+          requiresApproval: true,
+        };
+      else if (domain === 'homeassistant_restart')
+        activation = {
+          action: 'restart',
+          domain: 'homeassistant',
+          service: 'restart',
+          reason: 'Explicit companion request to restart Home Assistant',
+          requiresApproval: true,
+        };
+      if (!activation)
+        return reply.code(400).send({ error: 'Activation is not allowed' });
+      if (policyStore.get().reload_domains === 'deny')
+        return reply
+          .code(403)
+          .send({ error: 'Domain reloads are denied by policy' });
+      if (request.body?.confirm !== true)
+        return reply.code(400).send({
+          error: 'Explicit reload or restart confirmation is required',
+        });
+      const validation = await activationAdapter.validateCore();
+      if (!validation.valid)
+        return reply.code(409).send({
+          error: 'Home Assistant configuration validation failed',
+          validation,
+        });
+      const result = await activationAdapter.activate(activation);
+      audit({
+        action: 'bridge.activation',
+        initiator: 'home-assistant-automation',
+        decision: 'approved',
+        details: { activation },
+      });
+      return { status: 'activated', activation, result };
+    },
   );
 
   app.get('/api/v1/models/providers', async () => modelCatalog.list());
