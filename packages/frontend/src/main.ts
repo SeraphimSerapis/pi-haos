@@ -18,7 +18,7 @@ root.innerHTML = `
   </style>
   <h1>Pi Agent</h1>
   <p>Safe Home Assistant assistance, staged by default.</p>
-  <nav id="navigation" aria-label="Pi Agent sections">${['Chat', 'Changes', 'Tasks', 'Skills', 'Models', 'Settings'].map((item, index) => `<button type="button" data-section="${item.toLowerCase()}" aria-selected="${index === 0}">${item}</button>`).join('')}</nav>
+  <nav id="navigation" aria-label="Pi Agent sections">${['Chat', 'Changes', 'Tasks', 'Skills', 'Models', 'Audit', 'Settings'].map((item, index) => `<button type="button" data-section="${item.toLowerCase()}" aria-selected="${index === 0}">${item}</button>`).join('')}</nav>
   <section id="content" aria-live="polite"></section>
 `;
 
@@ -47,6 +47,14 @@ function renderSection(section: string): void {
   }
   if (section === 'skills') {
     void renderSkills();
+    return;
+  }
+  if (section === 'audit') {
+    void renderAudit();
+    return;
+  }
+  if (section === 'settings') {
+    void renderSettings();
     return;
   }
   if (section === 'changes' || section === 'tasks') {
@@ -340,6 +348,80 @@ async function renderTasks(): Promise<void> {
   } catch {
     content.innerHTML =
       '<section class="card"><p>Could not load tasks.</p></section>';
+  }
+}
+
+async function renderAudit(): Promise<void> {
+  if (!content) return;
+  content.innerHTML =
+    '<section class="card"><p>Loading audit history…</p></section>';
+  try {
+    const events = await api<
+      Array<{
+        id: string;
+        timestamp: string;
+        action: string;
+        initiator?: string;
+        taskId?: string;
+        transactionId?: string;
+        decision?: string;
+        details: Record<string, unknown>;
+      }>
+    >('/audit?limit=100');
+    content.innerHTML = `<section class="card"><h2>Audit history</h2><p class="muted">Sensitive values are redacted by the backend before storage.</p></section><section class="grid">${events.length ? events.map((event) => `<article class="card"><h3>${escapeHtml(event.action)}</h3><p class="muted">${escapeHtml(event.timestamp)} · ${escapeHtml(event.initiator ?? 'system')} ${event.decision ? `· ${escapeHtml(event.decision)}` : ''}</p>${event.taskId ? `<p>Task <code>${escapeHtml(event.taskId)}</code></p>` : ''}${event.transactionId ? `<p>Transaction <code>${escapeHtml(event.transactionId)}</code></p>` : ''}<details><summary>Details</summary><pre>${escapeHtml(JSON.stringify(event.details, null, 2))}</pre></details></article>`).join('') : '<article class="card"><p class="muted">No audit events recorded.</p></article>'}</section>`;
+  } catch {
+    content.innerHTML =
+      '<section class="card"><p>Could not load audit history.</p></section>';
+  }
+}
+
+async function renderSettings(): Promise<void> {
+  if (!content) return;
+  content.innerHTML =
+    '<section class="card"><p>Loading Pi runtime status…</p></section>';
+  try {
+    const status = await api<{
+      active: string;
+      installed: string[];
+      rollback: string | null;
+      updateInProgress: boolean;
+    }>('/pi/update/status');
+    content.innerHTML = `<section class="card"><h2>Pi runtime</h2><p>Active version: <code>${escapeHtml(status.active)}</code></p><p>Installed: ${escapeHtml(status.installed.join(', ') || 'none')}</p><p>Rollback: <code>${escapeHtml(status.rollback ?? 'unavailable')}</code></p><p class="muted">Updates are integrity-checked and only activate while sessions and transactions are idle.</p>${status.rollback ? '<button type="button" id="pi-rollback">Rollback</button>' : ''}<form id="pi-activate-form"><label>Activate installed version<select name="version">${status.installed.map((version) => `<option value="${escapeHtml(version)}">${escapeHtml(version)}</option>`).join('')}</select></label><button type="submit">Activate version</button><p id="pi-update-result" class="muted"></p></form></section>`;
+    document
+      .querySelector<HTMLButtonElement>('#pi-rollback')
+      ?.addEventListener('click', async () => {
+        await api('/pi/update/rollback', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ confirm: true }),
+        });
+        await renderSettings();
+      });
+    document
+      .querySelector<HTMLFormElement>('#pi-activate-form')
+      ?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const version = String(
+          new FormData(event.currentTarget as HTMLFormElement).get('version') ??
+            '',
+        );
+        const result = document.querySelector<HTMLElement>('#pi-update-result');
+        try {
+          await api('/pi/update/activate', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ version, confirm: true }),
+          });
+          await renderSettings();
+        } catch {
+          if (result)
+            result.textContent =
+              'Pi activation failed; check that all sessions are idle.';
+        }
+      });
+  } catch {
+    content.innerHTML =
+      '<section class="card"><p>Could not load Pi runtime status.</p></section>';
   }
 }
 
