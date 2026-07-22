@@ -1,0 +1,8 @@
+id: configuration-security-auditor
+name: Configuration Security Auditor
+version: 1.0.0
+description: Audits Home Assistant configuration for unsafe exposure and drift.
+source: bundled
+enabled: true
+permissions: [read_config, read_runtime_state, read_logs]
+compatibility: { min_app_version: 0.1.0, min_pi_version: 0.81.1 }

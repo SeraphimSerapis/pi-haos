@@ -8,12 +8,13 @@ paired companion integration owns approved writes.
 
 ## Status
 
-Milestones 1 and 2 are complete. The repository now provides a health-checked
-backend, an Ingress-compatible frontend shell, App packaging, development
-Compose setup, shared contracts, CI scaffolding, a supervised Pi JSONL RPC
-runtime, deterministic mock sessions, capability detection, and a fail-closed
-Landlock sandbox launcher. Home Assistant tools, transactions, and the paired
-write integration are planned for subsequent milestones.
+The repository now provides a health-checked Home Assistant App, an Ingress
+frontend with Chat, Models, and Skills views, a pinned Pi `0.81.1` runtime,
+supervised JSONL RPC sessions, read-only Home Assistant context routes,
+validated skills, transaction safety primitives, and a fail-closed Landlock
+sandbox. The companion integration exposes the authenticated service contract;
+live transaction application and full structured-tool wiring remain next
+milestones.
 
 ## Development
 

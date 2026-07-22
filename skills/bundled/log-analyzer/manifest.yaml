@@ -1,0 +1,8 @@
+id: log-analyzer
+name: Log Analyzer
+version: 1.0.0
+description: Summarizes bounded Home Assistant logs and identifies patterns.
+source: bundled
+enabled: true
+permissions: [read_logs, read_runtime_state]
+compatibility: { min_app_version: 0.1.0, min_pi_version: 0.81.1 }

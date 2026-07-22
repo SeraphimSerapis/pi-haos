@@ -1,0 +1,8 @@
+id: automation-author
+name: Automation Author
+version: 1.0.0
+description: Designs clear, testable Home Assistant automations in staging.
+source: bundled
+enabled: true
+permissions: [read_config, read_entities, write_staging]
+compatibility: { min_app_version: 0.1.0, min_pi_version: 0.81.1 }
