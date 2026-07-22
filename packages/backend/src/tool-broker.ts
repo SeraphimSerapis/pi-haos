@@ -1,17 +1,10 @@
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
 import { readConfigFile, type HomeAssistantClient } from '@pi-ha/ha-client';
+import type { Capability, PolicyDecision } from './policy-store.js';
 
-export type ToolCapability =
-  | 'read_config'
-  | 'read_runtime_state'
-  | 'read_entity_registry'
-  | 'read_device_registry'
-  | 'read_area_registry'
-  | 'read_logs'
-  | 'render_templates';
-
-export type ToolPolicyDecision = 'allow' | 'ask' | 'deny';
+export type ToolCapability = Capability;
+export type ToolPolicyDecision = PolicyDecision;
 export type ToolPolicy = Partial<Record<ToolCapability, ToolPolicyDecision>>;
 
 export interface ToolCallContext {
@@ -52,11 +45,19 @@ export function listStructuredTools(): Array<{
 }
 
 export class ToolBroker {
+  private policy: ToolPolicy;
+
   constructor(
     private readonly haClient: HomeAssistantClient,
     private readonly configRoot: string,
-    private readonly policy: ToolPolicy = {},
-  ) {}
+    policy: ToolPolicy = {},
+  ) {
+    this.policy = policy;
+  }
+
+  setPolicy(policy: ToolPolicy): void {
+    this.policy = { ...policy };
+  }
 
   async call(
     tool: string,

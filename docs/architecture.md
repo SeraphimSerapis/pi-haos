@@ -15,6 +15,7 @@ Assistant Core and is the trusted write boundary.
 flowchart LR
   UI[Home Assistant Ingress UI] --> API[Fastify backend]
   API --> DB[(SQLite under /data)]
+  API --> Policy[Capability policy under /data]
   API --> HA[HA REST/WebSocket proxy]
   API -->|session-token protected broker| Broker[Structured tool broker]
   Broker --> PI[Pi RPC worker + Landlock sandbox]
@@ -34,3 +35,5 @@ Pi is launched with built-in tools disabled and the bundled extension at
 the backend maps each name to one Home Assistant client method, validates and
 redacts inputs, and authenticates the call with a per-session token. The token
 is never returned to the Ingress browser or passed as a Supervisor credential.
+Capability policy updates are backend-enforced and immediately replace the
+broker policy for subsequent tool calls.

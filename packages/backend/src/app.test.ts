@@ -12,6 +12,7 @@ import { TaskStore } from './task-store.js';
 import { createApp } from './app.js';
 import type { ActivationAdapter } from './activation.js';
 import { AuditStore } from './audit-store.js';
+import { PolicyStore } from './policy-store.js';
 
 describe('backend health API', () => {
   let app: FastifyInstance;
@@ -139,6 +140,35 @@ describe('read-only Home Assistant context routes', () => {
     expect(allowed.json().result).toEqual([
       { entity_id: 'light.office', state: 'on' },
     ]);
+    await app.close();
+  });
+
+  it('exposes and persists the backend capability policy', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'pi-policy-api-'));
+    const app = createApp({
+      policyStore: new PolicyStore(join(root, 'policy.json')),
+      haClient: {} as HomeAssistantClient,
+    });
+    await app.ready();
+    const defaults = await app.inject({
+      method: 'GET',
+      url: '/api/v1/settings/policy',
+    });
+    expect(defaults.statusCode).toBe(200);
+    expect(defaults.json().shell_access).toBe('deny');
+    const updated = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/settings/policy',
+      payload: { read_runtime_state: 'deny' },
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json().read_runtime_state).toBe('deny');
+    const invalid = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/settings/policy',
+      payload: { shell_access: 'maybe' },
+    });
+    expect(invalid.statusCode).toBe(400);
     await app.close();
   });
 });

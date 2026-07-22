@@ -29,6 +29,7 @@ import {
   ToolBrokerError,
   listStructuredTools,
 } from './tool-broker.js';
+import { PolicyStore } from './policy-store.js';
 
 const appVersion = process.env.APP_VERSION ?? '0.1.0';
 
@@ -45,6 +46,7 @@ export interface AppOptions {
   taskStore?: TaskStore;
   auditStore?: AuditStore;
   piUpdateManager?: PiUpdateManager;
+  policyStore?: PolicyStore;
 }
 
 export function createApp(options: AppOptions = {}): FastifyInstance {
@@ -79,6 +81,8 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
   const sessions = new Map<string, SessionInfo>();
   const sessionTokens = new Map<string, string>();
   const toolBroker = new ToolBroker(haClient, configRoot);
+  const policyStore = options.policyStore ?? new PolicyStore();
+  toolBroker.setPolicy(policyStore.get());
   const sessionRoot =
     options.sessionRoot ?? join(process.env.DATA_DIR ?? '/data', 'sessions');
   const pairing = options.pairingManager ?? new PairingManager();
@@ -189,6 +193,30 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
   );
   app.get('/api/v1/context/check-config', async () => haClient.checkConfig());
   app.get('/api/v1/tools', async () => listStructuredTools());
+  app.get('/api/v1/settings/policy', async () => policyStore.get());
+  app.put<{ Body: Record<string, unknown> }>(
+    '/api/v1/settings/policy',
+    async (request, reply) => {
+      try {
+        const policy = await policyStore.replace(request.body);
+        toolBroker.setPolicy(policy);
+        audit({
+          action: 'settings.policy.update',
+          initiator: 'frontend',
+          decision: 'approved',
+          details: { policy },
+        });
+        return policy;
+      } catch (error) {
+        return reply.code(400).send({
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Invalid capability policy',
+        });
+      }
+    },
+  );
   app.post<{
     Params: { name: string };
     Headers: { 'x-pi-session-token'?: string };

@@ -1,7 +1,9 @@
 # Security model
 
-The default capability policy is read-only. The model cannot call arbitrary
-shell, arbitrary HTTP, Supervisor endpoints, or direct mutation functions.
+The default capability policy is read-only and is persisted under `/data`.
+The Ingress Settings view can change each capability to `allow`, `ask`, or
+`deny`; changes are validated and recorded in the audit log. The model cannot
+call arbitrary shell, arbitrary HTTP, Supervisor endpoints, or direct mutation functions.
 Pi's built-in tools are disabled. Backend code—not prompts—enforces every
 capability through a per-session, loopback broker token and records every
 decision.
