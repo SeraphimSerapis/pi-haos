@@ -12,5 +12,6 @@ SERVICE_CANCEL_TASK = "cancel_task"
 SERVICE_APPROVE_TASK = "approve_task"
 SERVICE_REJECT_TASK = "reject_task"
 SERVICE_RELOAD_DOMAIN = "reload_domain"
+SERVICE_APPLY_TRANSACTION = "apply_transaction"
 
 EVENT_TASK_UPDATED = f"{DOMAIN}_task_updated"

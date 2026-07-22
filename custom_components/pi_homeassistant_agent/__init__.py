@@ -5,12 +5,14 @@ from homeassistant.core import HomeAssistant
 import voluptuous as vol
 
 from .api import PiAgentApi
+from .transaction_apply import apply_approved_transaction
 from .const import (
     CONF_APP_URL,
     CONF_INTEGRATION_TOKEN,
     DOMAIN,
     EVENT_TASK_UPDATED,
     SERVICE_APPROVE_TASK,
+    SERVICE_APPLY_TRANSACTION,
     SERVICE_CANCEL_TASK,
     SERVICE_REJECT_TASK,
     SERVICE_RELOAD_DOMAIN,
@@ -25,6 +27,7 @@ SERVICE_SCHEMAS = {
     SERVICE_APPROVE_TASK: vol.Schema({vol.Required("task_id"): vol.All(str, vol.Length(min=1, max=128))}),
     SERVICE_REJECT_TASK: vol.Schema({vol.Required("task_id"): vol.All(str, vol.Length(min=1, max=128))}),
     SERVICE_RELOAD_DOMAIN: vol.Schema({vol.Required("domain"): vol.All(str, vol.Length(min=1, max=64))}),
+    SERVICE_APPLY_TRANSACTION: vol.Schema({vol.Required("transaction_id"): vol.All(str, vol.Length(min=1, max=128))}),
 }
 
 
@@ -48,6 +51,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 result = await configured["api"].approve_task(payload["task_id"])
             elif service == SERVICE_REJECT_TASK:
                 result = await configured["api"].reject_task(payload["task_id"])
+            elif service == SERVICE_APPLY_TRANSACTION:
+                transaction = await configured["api"].get_transaction(payload["transaction_id"])
+                result = await hass.async_add_executor_job(
+                    apply_approved_transaction, hass.config.path(), transaction
+                )
             else:
                 result = await configured["api"].reload_domain(payload["domain"])
             hass.bus.async_fire(EVENT_TASK_UPDATED, {"service": service, **result})

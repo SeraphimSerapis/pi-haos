@@ -34,3 +34,10 @@ reload_domain:
   name: Reload domain
   description: Request an explicit Home Assistant domain reload.
   fields: { domain: { required: true, selector: { text: {} } } }
+apply_transaction:
+  name: Apply transaction
+  description: Apply an approved, validated transaction fetched from the App.
+  fields:
+    transaction_id:
+      required: true
+      selector: { text: {} }
