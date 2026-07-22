@@ -84,6 +84,63 @@ describe('read-only Home Assistant context routes', () => {
     expect(response.statusCode).toBe(400);
     await app.close();
   });
+
+  it('protects structured tools with a per-session token', async () => {
+    class CapturingRuntime extends MockPiRuntime {
+      token: string | undefined;
+      override async startSession(
+        options: Parameters<MockPiRuntime['startSession']>[0],
+      ) {
+        this.token = options.toolToken;
+        return super.startSession(options);
+      }
+    }
+    const runtime = new CapturingRuntime();
+    const client = {
+      getStates: vi.fn(async () => [
+        { entity_id: 'light.office', state: 'on' },
+      ]),
+      getEntityRegistry: vi.fn(async () => []),
+      getDeviceRegistry: vi.fn(async () => []),
+      getAreaRegistry: vi.fn(async () => []),
+      getServices: vi.fn(async () => ({})),
+      getCoreInfo: vi.fn(async () => ({})),
+      getErrorLog: vi.fn(async () => ''),
+      renderTemplate: vi.fn(async (value: string) => value),
+      checkConfig: vi.fn(async () => ({ result: 'valid' })),
+    } as unknown as HomeAssistantClient;
+    const root = await mkdtemp(join(tmpdir(), 'pi-tool-api-'));
+    const app = createApp({
+      piRuntime: runtime,
+      haClient: client,
+      sessionRoot: root,
+    });
+    await app.ready();
+    const session = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chat/sessions',
+      payload: {},
+    });
+    expect(session.statusCode).toBe(200);
+    expect(runtime.token).toBeTruthy();
+    const denied = await app.inject({
+      method: 'POST',
+      url: '/api/v1/tools/ha_get_states',
+      payload: {},
+    });
+    expect(denied.statusCode).toBe(401);
+    const allowed = await app.inject({
+      method: 'POST',
+      url: '/api/v1/tools/ha_get_states',
+      headers: { 'x-pi-session-token': runtime.token },
+      payload: {},
+    });
+    expect(allowed.statusCode).toBe(200);
+    expect(allowed.json().result).toEqual([
+      { entity_id: 'light.office', state: 'on' },
+    ]);
+    await app.close();
+  });
 });
 
 describe('staged task routes', () => {

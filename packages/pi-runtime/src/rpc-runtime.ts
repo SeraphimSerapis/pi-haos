@@ -218,7 +218,9 @@ export class RpcPiRuntime implements PiRuntime {
           '--mode',
           'rpc',
           '--no-approve',
-          '--no-tools',
+          '--no-builtin-tools',
+          '--extension',
+          '/app/pi-tools/ha-tools.ts',
         ]),
       ],
     };
@@ -231,6 +233,10 @@ export class RpcPiRuntime implements PiRuntime {
       ...this.options.env,
       PATH: this.options.env?.PATH ?? process.env.PATH ?? '',
       PI_HOME: '/data/pi/home',
+      ...(options.toolToken ? { PI_HA_TOOL_TOKEN: options.toolToken } : {}),
+      ...(options.toolBrokerUrl
+        ? { PI_HA_TOOL_BROKER_URL: options.toolBrokerUrl }
+        : {}),
     };
     const child = (this.options.spawnProcess ?? spawn)(
       this.options.launcherPath,

@@ -27,6 +27,10 @@ export interface StartSessionOptions {
   model?: { provider: string; modelId: string };
   skills?: string[];
   brokerPort?: number;
+  /** One-time bearer token for the trusted structured-tool broker. */
+  toolToken?: string;
+  /** Loopback URL used by the Pi extension to reach the broker. */
+  toolBrokerUrl?: string;
 }
 
 export interface SessionInfo {

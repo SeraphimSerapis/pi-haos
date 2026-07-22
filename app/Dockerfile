@@ -24,6 +24,7 @@ COPY --from=build /src/packages/frontend/dist ./frontend/dist
 COPY --from=build /src/pi-sandbox ./bin/pi-sandbox
 COPY --from=build /src/pi /opt/pi
 COPY app/pi-runtime.json /app/pi-runtime.json
+COPY app/pi-tools /app/pi-tools
 COPY skills/bundled /app/bundled-skills
 COPY app/rootfs/entrypoint.sh /entrypoint.sh
 COPY app/apparmor.txt /app/apparmor.txt
