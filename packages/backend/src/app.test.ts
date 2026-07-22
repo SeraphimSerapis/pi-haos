@@ -10,6 +10,7 @@ import { PairingManager } from './pairing.js';
 import { TransactionStore } from './transaction-store.js';
 import { TaskStore } from './task-store.js';
 import { createApp } from './app.js';
+import type { ActivationAdapter } from './activation.js';
 
 describe('backend health API', () => {
   let app: FastifyInstance;
@@ -171,6 +172,56 @@ describe('staged task routes', () => {
     await app.close();
     taskStore.close();
     await rm(root, { recursive: true, force: true });
+  });
+
+  it('requires explicit activation confirmation and uses the injected adapter', async () => {
+    const taskStore = new TaskStore(':memory:');
+    const transactionStore = new TransactionStore(':memory:');
+    const activationAdapter: ActivationAdapter = {
+      validateCore: vi.fn(async () => ({ valid: true, errors: [] })),
+      activate: vi.fn(async () => ({ ok: true })),
+    };
+    const app = createApp({
+      taskStore,
+      transactionStore,
+      activationAdapter,
+      haClient: {} as HomeAssistantClient,
+    });
+    await app.ready();
+    transactionStore.registerReview({
+      id: 'tx-activation',
+      taskId: 'task-activation',
+      state: 'approved',
+      diffHash: 'hash',
+      files: [
+        {
+          path: 'automations.yaml',
+          content: '[]\n',
+          originalHash: null,
+          approved: true,
+        },
+      ],
+      validation: { status: 'passed', errors: [] },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      approvedAt: new Date().toISOString(),
+    });
+    const missing = await app.inject({
+      method: 'POST',
+      url: '/api/v1/transactions/tx-activation/activate',
+      payload: {},
+    });
+    expect(missing.statusCode).toBe(400);
+    const activated = await app.inject({
+      method: 'POST',
+      url: '/api/v1/transactions/tx-activation/activate',
+      payload: { confirm: true },
+    });
+    expect(activated.statusCode).toBe(200);
+    expect(activationAdapter.activate).toHaveBeenCalledOnce();
+    await app.close();
+    taskStore.close();
+    transactionStore.close();
   });
 });
 

@@ -24,4 +24,23 @@ describe('HomeAssistantClient', () => {
       new Headers(fetchImpl.mock.calls[0]?.[1]?.headers).get('authorization'),
     ).toBe('Bearer test-token');
   });
+
+  it('calls a bounded service with the backend-owned token', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(
+      async () =>
+        new Response('[]', { headers: { 'content-type': 'application/json' } }),
+    );
+    const client = new HomeAssistantClient({
+      baseUrl: 'http://ha',
+      token: 'token',
+      fetchImpl,
+    });
+    await client.callService('automation', 'reload');
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe(
+      'http://ha/api/services/automation/reload',
+    );
+    expect(
+      new Headers(fetchImpl.mock.calls[0]?.[1]?.headers).get('authorization'),
+    ).toBe('Bearer token');
+  });
 });

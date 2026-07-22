@@ -5,6 +5,7 @@ from homeassistant.core import HomeAssistant
 import voluptuous as vol
 
 from .api import PiAgentApi
+from .activation import resolve_activation
 from .transaction_apply import apply_approved_transaction
 from .const import (
     CONF_APP_URL,
@@ -56,8 +57,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 result = await hass.async_add_executor_job(
                     apply_approved_transaction, hass.config.path(), transaction
                 )
+            elif service == SERVICE_RELOAD_DOMAIN:
+                activation = resolve_activation(payload["domain"])
+                await hass.services.async_call(
+                    activation["domain"], activation["service"], blocking=True
+                )
+                result = {"status": "activated", **activation}
             else:
-                result = await configured["api"].reload_domain(payload["domain"])
+                result = {"status": "unsupported"}
             hass.bus.async_fire(EVENT_TASK_UPDATED, {"service": service, **result})
 
         for service_name, schema in SERVICE_SCHEMAS.items():

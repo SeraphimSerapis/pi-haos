@@ -65,6 +65,22 @@ export class HomeAssistantClient {
     return this.request('/api/config/core/check');
   }
 
+  async callService(
+    domain: string,
+    service: string,
+    data: Record<string, unknown> = {},
+  ): Promise<unknown> {
+    if (!/^[a-z0-9_]+$/.test(domain) || !/^[a-z0-9_]+$/.test(service))
+      throw new Error('Invalid Home Assistant service name');
+    if (JSON.stringify(data).length > 16 * 1024)
+      throw new Error('Home Assistant service payload is too large');
+    return this.request(`/api/services/${domain}/${service}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  }
+
   async getErrorLog(): Promise<string> {
     return this.request('/api/error_log', { accept: 'text/plain' });
   }

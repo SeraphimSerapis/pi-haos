@@ -17,6 +17,11 @@ import { TransactionStore } from './transaction-store.js';
 import { TaskStore } from './task-store.js';
 import { scanWorkspace } from './workspace-scanner.js';
 import { validateYamlTransaction } from './transaction-validation.js';
+import {
+  HomeAssistantActivationAdapter,
+  inferActivationPlan,
+  type ActivationAdapter,
+} from './activation.js';
 
 const appVersion = process.env.APP_VERSION ?? '0.1.0';
 
@@ -29,6 +34,7 @@ export interface AppOptions {
   sessionRoot?: string;
   pairingManager?: PairingManager;
   transactionStore?: TransactionStore;
+  activationAdapter?: ActivationAdapter;
   taskStore?: TaskStore;
 }
 
@@ -42,6 +48,8 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
         ? { token: process.env.SUPERVISOR_TOKEN }
         : {}),
     });
+  const activationAdapter =
+    options.activationAdapter ?? new HomeAssistantActivationAdapter(haClient);
   const configRoot =
     options.configRoot ?? process.env.HOMEASSISTANT_CONFIG ?? '/homeassistant';
   const modelCatalog = options.modelCatalog ?? new ModelCatalog();
@@ -424,6 +432,50 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
         providerId: provider.id,
         modelCount: provider.models.length,
       };
+    },
+  );
+  app.get<{ Params: { id: string } }>(
+    '/api/v1/transactions/:id/activation',
+    async (request, reply) => {
+      const transaction = transactionStore.get(request.params.id);
+      if (!transaction)
+        return reply.code(404).send({ error: 'Transaction not found' });
+      return inferActivationPlan(transaction);
+    },
+  );
+  app.post<{ Params: { id: string }; Body: { confirm?: boolean } }>(
+    '/api/v1/transactions/:id/activate',
+    async (request, reply) => {
+      const transaction = transactionStore.get(request.params.id);
+      if (!transaction)
+        return reply.code(404).send({ error: 'Transaction not found' });
+      if (
+        transaction.state !== 'approved' ||
+        transaction.validation.status !== 'passed'
+      )
+        return reply.code(409).send({
+          error: 'Transaction must be approved and validated before activation',
+        });
+      if (request.body?.confirm !== true)
+        return reply
+          .code(400)
+          .send({ error: 'Explicit activation confirmation is required' });
+      const plan = inferActivationPlan(transaction);
+      if (plan.action === 'none') return { status: 'no_action', plan };
+      const validation = await activationAdapter.validateCore();
+      if (!validation.valid) {
+        transactionStore.update({
+          ...transaction,
+          validation: { status: 'failed', errors: validation.errors },
+          updatedAt: new Date().toISOString(),
+        });
+        return reply.code(409).send({
+          error: 'Home Assistant configuration validation failed',
+          validation,
+        });
+      }
+      const result = await activationAdapter.activate(plan);
+      return { status: 'activated', plan, result };
     },
   );
   app.get<{ Params: { id: string } }>(

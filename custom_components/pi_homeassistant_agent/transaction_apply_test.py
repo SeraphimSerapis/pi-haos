@@ -4,8 +4,10 @@ from pathlib import Path
 
 try:
     from .transaction_apply import TransactionApplyError, apply_approved_transaction, infer_activation_plan
+    from .activation import resolve_activation
 except ImportError:
     from transaction_apply import TransactionApplyError, apply_approved_transaction, infer_activation_plan
+    from activation import resolve_activation
 
 
 def test_apply_and_rollback():
@@ -39,6 +41,13 @@ def test_activation_plan_is_advisory():
     assert infer_activation_plan(["automations.yaml"])["domain"] == "automation"
     assert infer_activation_plan(["configuration.yaml"])["action"] == "restart"
     assert infer_activation_plan(["known.yaml"])["action"] == "none"
+    assert resolve_activation("automation") == {"domain": "automation", "service": "reload"}
+    try:
+        resolve_activation("shell")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("arbitrary activation was accepted")
 
 
 if __name__ == "__main__":
