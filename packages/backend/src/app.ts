@@ -14,6 +14,7 @@ import {
 } from '@pi-ha/pi-runtime';
 import { PairingManager } from './pairing.js';
 import { TransactionStore } from './transaction-store.js';
+import { TaskStore } from './task-store.js';
 
 const appVersion = process.env.APP_VERSION ?? '0.1.0';
 
@@ -26,6 +27,7 @@ export interface AppOptions {
   sessionRoot?: string;
   pairingManager?: PairingManager;
   transactionStore?: TransactionStore;
+  taskStore?: TaskStore;
 }
 
 export function createApp(options: AppOptions = {}): FastifyInstance {
@@ -60,6 +62,14 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
     options.sessionRoot ?? join(process.env.DATA_DIR ?? '/data', 'sessions');
   const pairing = options.pairingManager ?? new PairingManager();
   const transactionStore = options.transactionStore ?? new TransactionStore();
+  const taskStore =
+    options.taskStore ??
+    new TaskStore(
+      process.env.TASK_DATABASE ??
+        (process.env.NODE_ENV === 'test'
+          ? ':memory:'
+          : join(process.env.DATA_DIR ?? '/data', 'database', 'tasks.sqlite')),
+    );
 
   app.get('/api/v1/health', async () => ({ status: 'ok' }));
   app.get('/api/v1/pairing', async () => pairing.status());
@@ -127,6 +137,65 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
 
   app.get('/api/v1/pi/health', async () => piRuntime.healthCheck());
   app.get('/api/v1/transactions', async () => transactionStore.list());
+  app.get('/api/v1/tasks', async () => taskStore.list());
+  app.get<{ Params: { id: string } }>(
+    '/api/v1/tasks/:id',
+    async (request, reply) => {
+      const task = taskStore.get(request.params.id);
+      return task ? task : reply.code(404).send({ error: 'Task not found' });
+    },
+  );
+  app.post<{
+    Body: {
+      prompt?: string;
+      initiator?: string;
+      model?: string;
+      provider?: string;
+      skills?: string[];
+    };
+  }>('/api/v1/tasks', async (request, reply) => {
+    const prompt = request.body?.prompt?.trim();
+    if (!prompt || prompt.length > 8192)
+      return reply
+        .code(400)
+        .send({ error: 'prompt must be 1-8192 characters' });
+    const skills = request.body?.skills ?? [];
+    if (
+      !Array.isArray(skills) ||
+      skills.length > 100 ||
+      skills.some((skill) => typeof skill !== 'string')
+    )
+      return reply
+        .code(400)
+        .send({ error: 'skills must be a bounded string array' });
+    return reply.code(201).send(
+      taskStore.create({
+        prompt,
+        initiator: request.body?.initiator ?? 'frontend',
+        model: request.body?.model ?? null,
+        provider: request.body?.provider ?? null,
+        piVersion: process.env.PI_VERSION ?? null,
+        skills,
+      }),
+    );
+  });
+  app.post<{ Params: { id: string; action: string } }>(
+    '/api/v1/tasks/:id/:action',
+    async (request, reply) => {
+      const action = request.params.action;
+      const state =
+        action === 'approve'
+          ? 'approved'
+          : action === 'reject'
+            ? 'rejected'
+            : action === 'cancel'
+              ? 'cancelled'
+              : null;
+      if (!state) return reply.code(404).send({ error: 'Unknown task action' });
+      const task = taskStore.transition(request.params.id, state);
+      return task ? task : reply.code(404).send({ error: 'Task not found' });
+    },
+  );
   app.post<{ Body: { model?: { provider: string; modelId: string } } }>(
     '/api/v1/chat/sessions',
     async (request) => {

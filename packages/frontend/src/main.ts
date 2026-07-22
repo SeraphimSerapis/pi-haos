@@ -220,6 +220,10 @@ async function renderSkills(): Promise<void> {
 
 async function renderTransactions(section: string): Promise<void> {
   if (!content) return;
+  if (section === 'tasks') {
+    await renderTasks();
+    return;
+  }
   content.innerHTML =
     '<section class="card"><p>Loading transaction history…</p></section>';
   try {
@@ -242,6 +246,60 @@ async function renderTransactions(section: string): Promise<void> {
   } catch {
     content.innerHTML =
       '<section class="card"><p>Could not load transaction history.</p></section>';
+  }
+}
+
+async function renderTasks(): Promise<void> {
+  if (!content) return;
+  content.innerHTML = '<section class="card"><p>Loading tasks…</p></section>';
+  try {
+    const tasks = await api<
+      Array<{
+        id: string;
+        prompt: string;
+        initiator: string;
+        state: string;
+        model: string | null;
+        skills: string[];
+        createdAt: string;
+        error: string | null;
+      }>
+    >('/tasks');
+    content.innerHTML = `<section class="card"><h2>Start staged task</h2><form id="task-form"><label>Prompt<textarea name="prompt" rows="4" required maxlength="8192" placeholder="Ask Pi to propose a safe configuration change…"></textarea></label><button type="submit">Create task</button><p id="task-result" class="muted"></p></form></section><section class="grid">${tasks.length ? tasks.map((task) => `<article class="card"><h2><code>${escapeHtml(task.id.slice(0, 8))}</code></h2><p>${escapeHtml(task.state)} · ${escapeHtml(task.initiator)}</p><p>${escapeHtml(task.prompt)}</p><p class="muted">${escapeHtml(task.model ?? 'default model')} · ${escapeHtml(task.skills.join(', ') || 'no skills')}</p>${task.error ? `<pre>${escapeHtml(task.error)}</pre>` : ''}${['created', 'awaiting_review'].includes(task.state) ? `<button type="button" data-task-action="approve" data-task-id="${escapeHtml(task.id)}">Approve</button> <button type="button" data-task-action="reject" data-task-id="${escapeHtml(task.id)}">Reject</button>` : ''}</article>`).join('') : '<article class="card"><p class="muted">No tasks recorded.</p></article>'}</section>`;
+    document
+      .querySelector<HTMLFormElement>('#task-form')
+      ?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const form = new FormData(event.currentTarget as HTMLFormElement);
+        const result = document.querySelector<HTMLElement>('#task-result');
+        try {
+          await api('/tasks', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              prompt: form.get('prompt'),
+              initiator: 'frontend',
+            }),
+          });
+          await renderTasks();
+        } catch {
+          if (result) result.textContent = 'Task could not be created.';
+        }
+      });
+    document
+      .querySelectorAll<HTMLButtonElement>('[data-task-action]')
+      .forEach((button) =>
+        button.addEventListener('click', async () => {
+          await api(
+            `/tasks/${encodeURIComponent(button.dataset.taskId ?? '')}/${button.dataset.taskAction}`,
+            { method: 'POST' },
+          );
+          await renderTasks();
+        }),
+      );
+  } catch {
+    content.innerHTML =
+      '<section class="card"><p>Could not load tasks.</p></section>';
   }
 }
 

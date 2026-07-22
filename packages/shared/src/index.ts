@@ -28,6 +28,22 @@ export const taskStateSchema = z.enum([
 ]);
 export type TaskState = z.infer<typeof taskStateSchema>;
 
+export const taskRecordSchema = z.object({
+  id: z.string(),
+  prompt: z.string().max(8192),
+  initiator: z.string().max(256),
+  model: z.string().nullable(),
+  provider: z.string().nullable(),
+  piVersion: z.string().nullable(),
+  skills: z.array(z.string()).max(100),
+  state: taskStateSchema,
+  transactionId: z.string().nullable(),
+  error: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type TaskRecord = z.infer<typeof taskRecordSchema>;
+
 export const agentEventSchema = z.object({
   id: z.string(),
   sessionId: z.string(),
