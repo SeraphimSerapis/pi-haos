@@ -355,9 +355,11 @@ describe('staged task routes', () => {
     await mkdir(configRoot);
     await writeFile(join(configRoot, 'automations.yaml'), 'old\n');
     const taskStore = new TaskStore(':memory:');
+    const runtime = new MockPiRuntime();
+    const startSession = vi.spyOn(runtime, 'startSession');
     const app = createApp({
       taskStore,
-      piRuntime: new MockPiRuntime(),
+      piRuntime: runtime,
       sessionRoot: root,
       configRoot,
       haClient: {} as HomeAssistantClient,
@@ -366,13 +368,18 @@ describe('staged task routes', () => {
     const created = await app.inject({
       method: 'POST',
       url: '/api/v1/tasks',
-      payload: { prompt: 'Inspect config' },
+      payload: { prompt: 'Inspect config', model: 'local:llama3.2' },
     });
     const result = await app.inject({
       method: 'POST',
       url: `/api/v1/tasks/${created.json().id}/run`,
     });
     expect(result.statusCode).toBe(200);
+    expect(startSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: { provider: 'local', modelId: 'llama3.2' },
+      }),
+    );
     expect(result.json().task.state).toBe('awaiting_review');
     expect(
       result

@@ -38,6 +38,17 @@ import { TaskQueue, TaskQueueFullError } from './task-queue.js';
 
 const appVersion = process.env.APP_VERSION ?? '0.1.0';
 
+function parseModelSelection(
+  value: string | null,
+): { provider: string; modelId: string } | undefined {
+  if (!value) return undefined;
+  const separator = value.indexOf(':');
+  if (separator <= 0 || separator === value.length - 1) return undefined;
+  const provider = value.slice(0, separator).trim();
+  const modelId = value.slice(separator + 1).trim();
+  return provider && modelId ? { provider, modelId } : undefined;
+}
+
 export interface AppOptions {
   haClient?: HomeAssistantClient;
   configRoot?: string;
@@ -1009,11 +1020,13 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
         details: { workspace: `task-${task.id}`, queue: taskQueue.status() },
       });
       try {
+        const selectedModel = parseModelSelection(task.model);
         const session = await piRuntime.startSession({
           sessionId,
           workspace,
           toolToken,
           toolBrokerUrl: process.env.TOOL_BROKER_URL ?? 'http://127.0.0.1:8099',
+          ...(selectedModel ? { model: selectedModel } : {}),
         });
         sessions.set(sessionId, session);
         sessionTokens.set(sessionId, toolToken);
