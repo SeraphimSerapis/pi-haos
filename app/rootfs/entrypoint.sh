@@ -14,13 +14,15 @@ if [ -r /data/options.json ]; then
   configured_diagnostics="$(node -e "const o=require('/data/options.json'); process.stdout.write(o.diagnostics === true ? 'true' : 'false')")"
   export DIAGNOSTICS_ENABLED="$configured_diagnostics"
 fi
-mkdir -p /data/database /data/sessions /data/transactions /data/skills /data/pi /data/logs
+mkdir -p /data/database /data/sessions /data/transactions \
+  /data/skills/bundled /data/skills/installed /data/skills/disabled /data/skills/metadata \
+  /data/pi /data/logs 2>/dev/null || true
 if [ -d /app/bundled-skills ]; then
   for skill in /app/bundled-skills/*; do
     [ -d "$skill" ] || continue
     target="/data/skills/bundled/$(basename "$skill")"
-    if [ ! -e "$target" ]; then
-      cp -R "$skill" "$target"
+    if [ ! -e "$target" ] && [ -w /data/skills/bundled ]; then
+      cp -R "$skill" "$target" 2>/dev/null || true
     fi
   done
 fi
