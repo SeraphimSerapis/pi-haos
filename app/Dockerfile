@@ -17,13 +17,12 @@ RUN pnpm build
 RUN pnpm deploy --legacy --filter @pi-ha/backend --prod /out
 RUN gcc -O2 -Wall -Wextra -o /src/pi-sandbox packages/pi-runtime/src/pi-sandbox.c
 
-FROM node:24-bookworm-slim
+FROM ghcr.io/hassio-addons/debian-base:9.1.0
 ENV NODE_ENV=production PORT=8099 HOST=0.0.0.0 FRONTEND_DIST=/app/frontend/dist \
   PI_VERSION=0.81.1 PI_COMMAND=/opt/pi/node_modules/.bin/pi
 WORKDIR /app
-RUN useradd --system --uid 10001 --create-home --shell /usr/sbin/nologin pi-agent \
-  && mkdir -p /data /homeassistant \
-  && chown pi-agent:pi-agent /data
+COPY --from=build /usr/local/bin/node /usr/local/bin/node
+RUN mkdir -p /data /homeassistant
 COPY --from=build /out ./backend
 COPY --from=build /src/packages/frontend/dist ./frontend/dist
 COPY --from=build /src/pi-sandbox ./bin/pi-sandbox
@@ -31,9 +30,8 @@ COPY --from=build /src/pi /opt/pi
 COPY app/pi-runtime.json /app/pi-runtime.json
 COPY app/pi-tools /app/pi-tools
 COPY skills/bundled /app/bundled-skills
-COPY app/rootfs/entrypoint.sh /entrypoint.sh
+COPY app/rootfs/etc /etc
 COPY app/apparmor.txt /app/apparmor.txt
-RUN chmod 0755 /entrypoint.sh
+RUN chmod 0755 /etc/s6-overlay/s6-rc.d/pi-agent/run
 EXPOSE 8099
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD node /app/backend/dist/server.js
-ENTRYPOINT ["/entrypoint.sh"]

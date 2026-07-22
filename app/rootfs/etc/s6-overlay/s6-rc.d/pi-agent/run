@@ -1,0 +1,20 @@
+#!/command/with-contenv bashio
+set -euo pipefail
+
+export LOG_LEVEL="$(bashio::config 'log_level' || echo info)"
+export DIAGNOSTICS_ENABLED="$(bashio::config 'diagnostics' || echo false)"
+export PI_UPDATES_ENABLED="$(bashio::config 'independent_pi_updates' || echo false)"
+
+mkdir -p /data/database /data/sessions /data/transactions \
+  /data/skills/bundled /data/skills/installed /data/skills/disabled /data/skills/metadata \
+  /data/pi /data/logs
+
+if [ -d /app/bundled-skills ] && [ -w /data/skills/bundled ]; then
+  for skill in /app/bundled-skills/*; do
+    [ -d "$skill" ] || continue
+    target="/data/skills/bundled/$(basename "$skill")"
+    [ -e "$target" ] || cp -R "$skill" "$target"
+  done
+fi
+
+exec node /app/backend/dist/server.js

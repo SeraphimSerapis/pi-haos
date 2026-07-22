@@ -8,10 +8,11 @@ and `no-new-privileges`. It is useful for checking the App HTTP surface and
 persistence, but it cannot prove Home Assistant Core API semantics or
 companion integration behavior.
 
-The App entrypoint reads Home Assistant's `/data/options.json` and maps the
-declared `log_level`, `diagnostics`, and `independent_pi_updates` options to
-bounded environment settings. Persistent GUI settings remain authoritative
-after their first initialization.
+The production App uses the Home Assistant Community Debian base image, which
+provides s6 and bashio. The `pi-agent` s6 service reads the declared
+`log_level`, `diagnostics`, and `independent_pi_updates` options through
+`bashio::config` and exports only bounded environment settings to the Node
+backend. The Node process never reads `/data/options.json` directly.
 
 The repository is a normal Git checkout. Keep commits small and run all quality
 gates before pushing.

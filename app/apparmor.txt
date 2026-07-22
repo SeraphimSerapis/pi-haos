@@ -12,10 +12,14 @@ profile pi_homeassistant_agent flags=(attach_disconnected,mediate_deleted) {
 
   # The container entrypoint and Node runtime need execute permissions. Keep
   # this limited to the image's known runtime locations.
-  /entrypoint.sh rix,
+  /init rix,
   /bin/** rix,
   /usr/bin/** rix,
   /usr/local/bin/** rix,
+  /command/** rix,
+  /package/** rix,
+  /etc/s6-overlay/** rix,
+  /run/{s6,s6-rc*,service}/** rix,
   /opt/pi/** rix,
   /app/bin/pi-sandbox rix,
 
@@ -31,6 +35,8 @@ profile pi_homeassistant_agent flags=(attach_disconnected,mediate_deleted) {
   /homeassistant/** r,
   /data/** rwk,
   /tmp/** rwk,
+  /etc/services.d/** rwix,
+  /etc/cont-init.d/** rwix,
   /dev/null rw,
   /dev/urandom r,
   /dev/tty rw,

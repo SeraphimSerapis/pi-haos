@@ -1,5 +1,5 @@
 name: Pi Agent
-version: '0.1.4'
+version: '0.1.5'
 slug: pi_homeassistant_agent
 description: >-
   An experimental, safety-first Pi agent for inspecting and reviewing Home
@@ -10,6 +10,7 @@ arch:
   - aarch64
 image: ghcr.io/seraphimserapis/pi-haos
 startup: application
+init: false
 boot: auto
 ingress: true
 ingress_port: 8099
