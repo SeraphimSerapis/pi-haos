@@ -15,6 +15,7 @@ profile pi_homeassistant_agent flags=(attach_disconnected,mediate_deleted) {
   /entrypoint.sh rix,
   /bin/** rix,
   /usr/bin/** rix,
+  /usr/bin/setpriv rix,
   /usr/local/bin/** rix,
   /opt/pi/** rix,
   /app/bin/pi-sandbox rix,

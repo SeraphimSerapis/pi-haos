@@ -12,6 +12,7 @@ if [ -f /data/options.json ]; then
   export DIAGNOSTICS_ENABLED="$configured_diagnostics"
 fi
 mkdir -p /data/database /data/sessions /data/transactions /data/skills /data/pi /data/logs
+chown -R pi-agent:pi-agent /data/database /data/sessions /data/transactions /data/skills /data/pi /data/logs
 if [ -d /app/bundled-skills ]; then
   for skill in /app/bundled-skills/*; do
     [ -d "$skill" ] || continue
@@ -21,4 +22,5 @@ if [ -d /app/bundled-skills ]; then
     fi
   done
 fi
-exec node /app/backend/dist/server.js
+exec setpriv --reuid=10001 --regid=10001 --init-groups \
+  node /app/backend/dist/server.js

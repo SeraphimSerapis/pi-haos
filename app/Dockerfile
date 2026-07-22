@@ -22,7 +22,10 @@ FROM node:24-bookworm-slim
 ENV NODE_ENV=production PORT=8099 HOST=0.0.0.0 FRONTEND_DIST=/app/frontend/dist \
   PI_VERSION=0.81.1 PI_COMMAND=/opt/pi/node_modules/.bin/pi
 WORKDIR /app
-RUN useradd --system --uid 10001 --create-home --shell /usr/sbin/nologin pi-agent \
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends util-linux \
+  && rm -rf /var/lib/apt/lists/* \
+  && useradd --system --uid 10001 --create-home --shell /usr/sbin/nologin pi-agent \
   && mkdir -p /data /homeassistant \
   && chown pi-agent:pi-agent /data
 COPY --from=build /out ./backend
@@ -35,7 +38,6 @@ COPY skills/bundled /app/bundled-skills
 COPY app/rootfs/entrypoint.sh /entrypoint.sh
 COPY app/apparmor.txt /app/apparmor.txt
 RUN chmod 0755 /entrypoint.sh
-USER pi-agent
 EXPOSE 8099
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD node /app/backend/dist/server.js
 ENTRYPOINT ["/entrypoint.sh"]
