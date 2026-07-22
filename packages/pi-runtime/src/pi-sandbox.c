@@ -81,6 +81,7 @@ int main(int argc, char **argv) {
   const __u64 read_only = LANDLOCK_ACCESS_FS_EXECUTE | LANDLOCK_ACCESS_FS_READ_FILE | LANDLOCK_ACCESS_FS_READ_DIR;
   if (landlock_add_path(ruleset, "/app", read_only) < 0) fail("cannot allow runtime files");
   if (landlock_add_path(ruleset, "/opt/pi", read_only) < 0) fail("cannot allow Pi runtime");
+  if (landlock_add_path(ruleset, "/homeassistant", read_only) < 0) fail("cannot allow Home Assistant config");
   if (landlock_add_path(ruleset, "/usr", read_only) < 0) fail("cannot allow system libraries");
   if (landlock_add_path(ruleset, "/lib", read_only) < 0) fail("cannot allow libraries");
   if (landlock_add_path(ruleset, "/lib64", read_only) < 0 && errno != ENOENT) fail("cannot allow libraries");

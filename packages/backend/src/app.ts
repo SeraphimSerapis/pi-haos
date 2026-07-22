@@ -1,11 +1,17 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { basename, join } from 'node:path';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { appStatusSchema, type AppStatus } from '@pi-ha/shared';
 import { HomeAssistantClient, readConfigFile } from '@pi-ha/ha-client';
 import { ModelCatalog, type ModelProviderInput } from './model-catalog.js';
 import { SkillsManager } from '@pi-ha/skills-manager';
 import type { SkillManifest } from '@pi-ha/skills-manager';
+import {
+  RpcPiRuntime,
+  type PiRuntime,
+  type SessionInfo,
+} from '@pi-ha/pi-runtime';
 
 const appVersion = process.env.APP_VERSION ?? '0.1.0';
 
@@ -14,6 +20,8 @@ export interface AppOptions {
   configRoot?: string;
   modelCatalog?: ModelCatalog;
   skillsManager?: SkillsManager;
+  piRuntime?: PiRuntime;
+  sessionRoot?: string;
 }
 
 export function createApp(options: AppOptions = {}): FastifyInstance {
@@ -30,6 +38,22 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
     options.configRoot ?? process.env.HOMEASSISTANT_CONFIG ?? '/homeassistant';
   const modelCatalog = options.modelCatalog ?? new ModelCatalog();
   const skillsManager = options.skillsManager ?? new SkillsManager();
+  const piRuntime =
+    options.piRuntime ??
+    new RpcPiRuntime({
+      piCommand: process.env.PI_COMMAND ?? '/opt/pi/node_modules/.bin/pi',
+      launcherPath: process.env.PI_LAUNCHER ?? '/app/bin/pi-sandbox',
+      version: {
+        version: process.env.PI_VERSION ?? '0.81.1',
+        source: 'bundled',
+        path: process.env.PI_COMMAND ?? '/opt/pi/node_modules/.bin/pi',
+      },
+      discoveryWorkspace:
+        process.env.PI_DISCOVERY_WORKSPACE ?? '/data/sessions/discovery',
+    });
+  const sessions = new Map<string, SessionInfo>();
+  const sessionRoot =
+    options.sessionRoot ?? join(process.env.DATA_DIR ?? '/data', 'sessions');
 
   app.get('/api/v1/health', async () => ({ status: 'ok' }));
 
@@ -77,6 +101,58 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
     },
   );
   app.get('/api/v1/context/check-config', async () => haClient.checkConfig());
+
+  app.get('/api/v1/pi/health', async () => piRuntime.healthCheck());
+  app.post<{ Body: { model?: { provider: string; modelId: string } } }>(
+    '/api/v1/chat/sessions',
+    async (request) => {
+      const id = randomUUID();
+      const workspace = join(sessionRoot, id);
+      await mkdir(workspace, { recursive: true, mode: 0o700 });
+      const session = await piRuntime.startSession({
+        sessionId: id,
+        workspace,
+        ...(request.body?.model ? { model: request.body.model } : {}),
+      });
+      sessions.set(id, session);
+      return session;
+    },
+  );
+  app.post<{ Params: { id: string }; Body: { message?: string } }>(
+    '/api/v1/chat/sessions/:id/messages',
+    async (request, reply) => {
+      const message = request.body?.message?.trim();
+      if (!message)
+        return reply.code(400).send({ error: 'message is required' });
+      if (!sessions.has(request.params.id))
+        return reply.code(404).send({ error: 'Session not found' });
+      const events = [];
+      let responseSize = 0;
+      for await (const event of piRuntime.sendMessage(
+        request.params.id,
+        message,
+      )) {
+        const serialized = JSON.stringify(event);
+        responseSize += Buffer.byteLength(serialized, 'utf8');
+        if (responseSize > 256 * 1024)
+          return reply.code(413).send({
+            error: 'Agent response exceeded the configured size limit',
+          });
+        events.push(event);
+      }
+      return { sessionId: request.params.id, events };
+    },
+  );
+  app.delete<{ Params: { id: string } }>(
+    '/api/v1/chat/sessions/:id',
+    async (request, reply) => {
+      if (!sessions.has(request.params.id))
+        return reply.code(404).send({ error: 'Session not found' });
+      await piRuntime.closeSession(request.params.id);
+      sessions.delete(request.params.id);
+      return { status: 'closed' };
+    },
+  );
 
   app.get('/api/v1/models/providers', async () => modelCatalog.list());
   app.put<{ Params: { id: string }; Body: ModelProviderInput }>(

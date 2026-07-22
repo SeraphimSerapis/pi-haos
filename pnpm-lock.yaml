@@ -19,6 +19,9 @@ importers:
       '@pi-ha/ha-client':
         specifier: workspace:*
         version: link:../ha-client
+      '@pi-ha/pi-runtime':
+        specifier: workspace:*
+        version: link:../pi-runtime
       '@pi-ha/shared':
         specifier: workspace:*
         version: link:../shared

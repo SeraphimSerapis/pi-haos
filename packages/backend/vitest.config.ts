@@ -10,6 +10,7 @@ export default defineConfig({
         __dirname,
         '../skills-manager/src/index.ts',
       ),
+      '@pi-ha/pi-runtime': resolve(__dirname, '../pi-runtime/src/index.ts'),
     },
   },
 });

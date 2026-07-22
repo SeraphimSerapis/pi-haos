@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import type { HomeAssistantClient } from '@pi-ha/ha-client';
+import type { PiRuntime } from '@pi-ha/pi-runtime';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createApp } from './app.js';
 
 describe('backend health API', () => {
@@ -73,5 +77,58 @@ describe('read-only Home Assistant context routes', () => {
     });
     expect(response.statusCode).toBe(400);
     await app.close();
+  });
+});
+
+describe('isolated Pi chat routes', () => {
+  it('creates a session and bounds messages to that session', async () => {
+    const sessionRoot = await mkdtemp(join(tmpdir(), 'pi-chat-'));
+    const runtime = {
+      startSession: vi.fn(async (options) => ({
+        id: options.sessionId ?? 'session',
+        workspace: options.workspace,
+        startedAt: new Date().toISOString(),
+        status: 'idle' as const,
+      })),
+      sendMessage: vi.fn(async function* () {
+        yield { type: 'text_delta' as const, delta: 'hello' };
+      }),
+      closeSession: vi.fn(async () => {}),
+      healthCheck: vi.fn(async () => ({
+        healthy: true,
+        version: null,
+        capabilities: null,
+        activeSessions: 0,
+      })),
+    } as unknown as PiRuntime;
+    const app = createApp({
+      piRuntime: runtime,
+      haClient: {} as HomeAssistantClient,
+      sessionRoot,
+    });
+    await app.ready();
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chat/sessions',
+      payload: {},
+    });
+    expect(created.statusCode).toBe(200);
+    const session = created.json() as { id: string };
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chat/sessions/${session.id}/messages`,
+      payload: { message: 'hello' },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().events).toEqual([
+      { type: 'text_delta', delta: 'hello' },
+    ]);
+    await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/chat/sessions/${session.id}`,
+    });
+    expect(runtime.closeSession).toHaveBeenCalledWith(session.id);
+    await app.close();
+    await rm(sessionRoot, { recursive: true, force: true });
   });
 });
