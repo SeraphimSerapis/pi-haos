@@ -10,6 +10,7 @@ RUN pnpm deploy --legacy --filter @pi-ha/backend --prod /out
 RUN gcc -O2 -Wall -Wextra -o /src/pi-sandbox packages/pi-runtime/src/pi-sandbox.c
 RUN npm install --prefix /src/pi --ignore-scripts --omit=dev \
   @earendil-works/pi-coding-agent@0.81.1
+RUN test "$(/src/pi/node_modules/.bin/pi --version)" = "0.81.1"
 
 FROM node:24-bookworm-slim
 ENV NODE_ENV=production PORT=8099 HOST=0.0.0.0 FRONTEND_DIST=/app/frontend/dist \
