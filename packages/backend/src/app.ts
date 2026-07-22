@@ -31,6 +31,7 @@ import {
   listStructuredTools,
 } from './tool-broker.js';
 import { PolicyStore } from './policy-store.js';
+import { KeyedMutex } from './concurrency.js';
 
 const appVersion = process.env.APP_VERSION ?? '0.1.0';
 
@@ -81,6 +82,7 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
     });
   const sessions = new Map<string, SessionInfo>();
   const sessionTokens = new Map<string, string>();
+  const turnMutex = new KeyedMutex();
   const toolBroker = new ToolBroker(haClient, configRoot);
   const policyStore = options.policyStore ?? new PolicyStore();
   toolBroker.setPolicy(policyStore.get());
@@ -437,21 +439,23 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
         return reply.code(400).send({ error: 'message is required' });
       if (!sessions.has(request.params.id))
         return reply.code(404).send({ error: 'Session not found' });
-      const events = [];
-      let responseSize = 0;
-      for await (const event of piRuntime.sendMessage(
-        request.params.id,
-        message,
-      )) {
-        const serialized = JSON.stringify(event);
-        responseSize += Buffer.byteLength(serialized, 'utf8');
-        if (responseSize > 256 * 1024)
-          return reply.code(413).send({
-            error: 'Agent response exceeded the configured size limit',
-          });
-        events.push(event);
-      }
-      return { sessionId: request.params.id, events };
+      return turnMutex.run(request.params.id, async () => {
+        const events = [];
+        let responseSize = 0;
+        for await (const event of piRuntime.sendMessage(
+          request.params.id,
+          message,
+        )) {
+          const serialized = JSON.stringify(event);
+          responseSize += Buffer.byteLength(serialized, 'utf8');
+          if (responseSize > 256 * 1024)
+            return reply.code(413).send({
+              error: 'Agent response exceeded the configured size limit',
+            });
+          events.push(event);
+        }
+        return { sessionId: request.params.id, events };
+      });
     },
   );
   app.delete<{ Params: { id: string } }>(
