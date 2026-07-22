@@ -289,19 +289,27 @@ async function renderTasks(): Promise<void> {
   if (!content) return;
   content.innerHTML = '<section class="card"><p>Loading tasks…</p></section>';
   try {
-    const tasks = await api<
-      Array<{
-        id: string;
-        prompt: string;
-        initiator: string;
-        state: string;
-        model: string | null;
-        skills: string[];
-        createdAt: string;
-        error: string | null;
-      }>
-    >('/tasks');
-    content.innerHTML = `<section class="card"><h2>Start staged task</h2><form id="task-form"><label>Prompt<textarea name="prompt" rows="4" required maxlength="8192" placeholder="Ask Pi to propose a safe configuration change…"></textarea></label><button type="submit">Create task</button><p id="task-result" class="muted"></p></form></section><section class="grid">${tasks.length ? tasks.map((task) => `<article class="card"><h2><code>${escapeHtml(task.id.slice(0, 8))}</code></h2><p>${escapeHtml(task.state)} · ${escapeHtml(task.initiator)}</p><p>${escapeHtml(task.prompt)}</p><p class="muted">${escapeHtml(task.model ?? 'default model')} · ${escapeHtml(task.skills.join(', ') || 'no skills')}</p>${task.error ? `<pre>${escapeHtml(task.error)}</pre>` : ''}${task.state === 'created' ? `<button type="button" data-task-run="${escapeHtml(task.id)}">Run in staging</button>` : ''}${task.state === 'awaiting_review' ? '<p class="muted">Review and approve the generated transaction in Changes.</p>' : ''}</article>`).join('') : '<article class="card"><p class="muted">No tasks recorded.</p></article>'}</section>`;
+    const [tasks, queue] = await Promise.all([
+      api<
+        Array<{
+          id: string;
+          prompt: string;
+          initiator: string;
+          state: string;
+          model: string | null;
+          skills: string[];
+          createdAt: string;
+          error: string | null;
+        }>
+      >('/tasks'),
+      api<{
+        active: number;
+        queued: number;
+        maxConcurrent: number;
+        maxQueued: number;
+      }>('/tasks/queue'),
+    ]);
+    content.innerHTML = `<section class="card"><h2>Start staged task</h2><p class="muted">Queue: ${queue.active} active · ${queue.queued} waiting (limit ${queue.maxConcurrent}/${queue.maxQueued})</p><form id="task-form"><label>Prompt<textarea name="prompt" rows="4" required maxlength="8192" placeholder="Ask Pi to propose a safe configuration change…"></textarea></label><button type="submit">Create task</button><p id="task-result" class="muted"></p></form></section><section class="grid">${tasks.length ? tasks.map((task) => `<article class="card"><h2><code>${escapeHtml(task.id.slice(0, 8))}</code></h2><p>${escapeHtml(task.state)} · ${escapeHtml(task.initiator)}</p><p>${escapeHtml(task.prompt)}</p><p class="muted">${escapeHtml(task.model ?? 'default model')} · ${escapeHtml(task.skills.join(', ') || 'no skills')}</p>${task.error ? `<pre>${escapeHtml(task.error)}</pre>` : ''}${task.state === 'created' ? `<button type="button" data-task-run="${escapeHtml(task.id)}">Run in staging</button>` : ''}${task.state === 'awaiting_review' ? '<p class="muted">Review and approve the generated transaction in Changes.</p>' : ''}</article>`).join('') : '<article class="card"><p class="muted">No tasks recorded.</p></article>'}</section>`;
     document
       .querySelector<HTMLFormElement>('#task-form')
       ?.addEventListener('submit', async (event) => {

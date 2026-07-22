@@ -32,6 +32,7 @@ import {
 } from './tool-broker.js';
 import { PolicyStore } from './policy-store.js';
 import { KeyedMutex } from './concurrency.js';
+import { TaskQueue, TaskQueueFullError } from './task-queue.js';
 
 const appVersion = process.env.APP_VERSION ?? '0.1.0';
 
@@ -49,6 +50,7 @@ export interface AppOptions {
   auditStore?: AuditStore;
   piUpdateManager?: PiUpdateManager;
   policyStore?: PolicyStore;
+  taskQueue?: TaskQueue;
 }
 
 export function createApp(options: AppOptions = {}): FastifyInstance {
@@ -83,6 +85,12 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
   const sessions = new Map<string, SessionInfo>();
   const sessionTokens = new Map<string, string>();
   const turnMutex = new KeyedMutex();
+  const taskQueue =
+    options.taskQueue ??
+    new TaskQueue(
+      Number(process.env.MAX_TASK_CONCURRENCY ?? 1),
+      Number(process.env.MAX_TASK_QUEUE ?? 20),
+    );
   const toolBroker = new ToolBroker(haClient, configRoot);
   const policyStore = options.policyStore ?? new PolicyStore();
   toolBroker.setPolicy(policyStore.get());
@@ -325,6 +333,7 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
     async (request) => auditStore.list(Number(request.query.limit ?? 100)),
   );
   app.get('/api/v1/tasks', async () => taskStore.list());
+  app.get('/api/v1/tasks/queue', async () => taskQueue.status());
   app.get<{ Params: { id: string } }>(
     '/api/v1/tasks/:id',
     async (request, reply) => {
@@ -862,6 +871,25 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
         return reply
           .code(409)
           .send({ error: 'Only newly created tasks can run' });
+      const workspace = join(sessionRoot, `task-${task.id}`);
+      await mkdir(workspace, { recursive: true, mode: 0o700 });
+      const sessionId = `task-${task.id}`;
+      const toolToken = randomUUID();
+      let releaseTask: (() => void) | undefined;
+      try {
+        releaseTask = await taskQueue.acquire();
+      } catch (error) {
+        if (error instanceof TaskQueueFullError)
+          return reply.code(429).send({ error: error.message });
+        throw error;
+      }
+      const current = taskStore.get(task.id);
+      if (!current || current.state !== 'created') {
+        releaseTask();
+        return reply
+          .code(409)
+          .send({ error: 'Task is already queued or running' });
+      }
       taskStore.transition(task.id, 'planning');
       audit({
         action: 'task.run',
@@ -870,12 +898,8 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
         model: task.model ?? undefined,
         provider: task.provider ?? undefined,
         piVersion: task.piVersion ?? undefined,
-        details: { workspace: `task-${task.id}` },
+        details: { workspace: `task-${task.id}`, queue: taskQueue.status() },
       });
-      const workspace = join(sessionRoot, `task-${task.id}`);
-      await mkdir(workspace, { recursive: true, mode: 0o700 });
-      const sessionId = `task-${task.id}`;
-      const toolToken = randomUUID();
       try {
         const session = await piRuntime.startSession({
           sessionId,
@@ -927,6 +951,7 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
         await piRuntime.closeSession(sessionId).catch(() => undefined);
         sessions.delete(sessionId);
         sessionTokens.delete(sessionId);
+        releaseTask();
       }
     },
   );
