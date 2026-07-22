@@ -4,7 +4,13 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json .prettie
 COPY packages ./packages
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential linux-libc-dev \
   && rm -rf /var/lib/apt/lists/* \
-  && corepack enable && pnpm install --frozen-lockfile
+  && corepack enable \
+  && for attempt in 1 2 3; do \
+    if pnpm install --frozen-lockfile; then exit 0; fi; \
+    echo "pnpm install attempt ${attempt} failed; retrying" >&2; \
+    sleep $((attempt * 5)); \
+  done \
+  && exit 1
 RUN pnpm build
 RUN pnpm deploy --legacy --filter @pi-ha/backend --prod /out
 RUN gcc -O2 -Wall -Wextra -o /src/pi-sandbox packages/pi-runtime/src/pi-sandbox.c
