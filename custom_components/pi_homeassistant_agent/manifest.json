@@ -1,0 +1,11 @@
+{
+  "domain": "pi_homeassistant_agent",
+  "name": "Pi Home Assistant Agent",
+  "version": "0.1.0",
+  "documentation": "https://github.com/example/pi-homeassistant-agent",
+  "issue_tracker": "https://github.com/example/pi-homeassistant-agent/issues",
+  "codeowners": ["@pi-homeassistant-agent"],
+  "config_flow": true,
+  "iot_class": "local_push",
+  "requirements": []
+}

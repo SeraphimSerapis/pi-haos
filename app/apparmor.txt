@@ -1,0 +1,22 @@
+# Starting profile for the App container. This is intentionally conservative:
+# the live Home Assistant configuration is readable but never writable, and
+# private state is limited to the App's /data volume. The Pi child-process
+# filesystem boundary is a separate Milestone 2 control.
+profile pi_homeassistant_agent flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+  network inet stream,
+  network inet6 stream,
+  /app/** r,
+  /usr/** r,
+  /lib/** r,
+  /lib64/** r,
+  /etc/** r,
+  /homeassistant/** r,
+  /data/** rwk,
+  /tmp/** rwk,
+  deny /homeassistant/** wklx,
+  deny /run/docker.sock rwklx,
+  deny /proc/** w,
+  deny /sys/** w,
+  deny /dev/** w,
+}

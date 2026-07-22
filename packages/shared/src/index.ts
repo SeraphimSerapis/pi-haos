@@ -1,0 +1,38 @@
+import { z } from 'zod';
+
+export const appStatusSchema = z.object({
+  status: z.literal('ok'),
+  appVersion: z.string(),
+  piVersion: z.string().nullable(),
+  homeAssistantMount: z.literal('read-only'),
+  integration: z.enum(['not-installed', 'unpaired', 'healthy', 'unhealthy']),
+  timestamp: z.string(),
+});
+export type AppStatus = z.infer<typeof appStatusSchema>;
+
+export const taskStateSchema = z.enum([
+  'created',
+  'planning',
+  'staging',
+  'awaiting_review',
+  'approved',
+  'validating',
+  'applying',
+  'post_apply_validation',
+  'completed',
+  'rejected',
+  'failed',
+  'rolled_back',
+  'cancelled',
+  'conflicted',
+]);
+export type TaskState = z.infer<typeof taskStateSchema>;
+
+export const agentEventSchema = z.object({
+  id: z.string(),
+  sessionId: z.string(),
+  type: z.enum(['text_delta', 'tool_start', 'tool_end', 'status', 'error']),
+  payload: z.record(z.string(), z.unknown()),
+  timestamp: z.string(),
+});
+export type AgentEvent = z.infer<typeof agentEventSchema>;

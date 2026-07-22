@@ -1,0 +1,11 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Pair Pi Agent",
+        "description": "Enter the internal App URL and one-time pairing code shown by the Pi Agent App.",
+        "data": { "app_url": "App URL", "pairing_code": "Pairing code" }
+      }
+    }
+  }
+}

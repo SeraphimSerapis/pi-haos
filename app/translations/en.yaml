@@ -1,0 +1,10 @@
+configuration:
+  log_level:
+    name: Log level
+    description: Application logging verbosity.
+  diagnostics:
+    name: Diagnostics
+    description: Enable additional local diagnostics without sending data externally.
+  independent_pi_updates:
+    name: Independent Pi updates
+    description: Allow manually initiated Pi runtime updates from the App UI.

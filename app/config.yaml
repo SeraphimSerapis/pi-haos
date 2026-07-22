@@ -1,0 +1,39 @@
+name: Pi Agent
+version: '0.1.0'
+slug: pi_homeassistant_agent
+description: >-
+  An experimental, safety-first Pi agent for inspecting and reviewing Home
+  Assistant configuration through a native Ingress panel.
+url: https://github.com/example/pi-homeassistant-agent
+arch:
+  - amd64
+  - aarch64
+image: ghcr.io/example/pi-homeassistant-agent
+startup: application
+boot: auto
+ingress: true
+ingress_port: 8099
+ingress_stream: true
+panel_icon: mdi:robot-outline
+panel_title: Pi Agent
+panel_admin: true
+apparmor: true
+homeassistant_api: true
+hassio_role: default
+map:
+  - type: homeassistant_config
+    read_only: true
+    path: /homeassistant
+  - type: data
+    read_only: false
+    path: /data
+watchdog: http://[HOST]:[PORT:8099]/api/v1/health
+stage: experimental
+options:
+  log_level: info
+  diagnostics: false
+  independent_pi_updates: false
+schema:
+  log_level: list(trace|debug|info|warn|error)
+  diagnostics: bool
+  independent_pi_updates: bool

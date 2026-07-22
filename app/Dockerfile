@@ -1,0 +1,23 @@
+FROM node:24-bookworm-slim AS build
+WORKDIR /src
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json .prettierrc.json ./
+COPY packages ./packages
+RUN corepack enable && pnpm install --frozen-lockfile
+RUN pnpm build
+RUN pnpm deploy --legacy --filter @pi-ha/backend --prod /out
+
+FROM node:24-bookworm-slim
+ENV NODE_ENV=production PORT=8099 HOST=0.0.0.0 FRONTEND_DIST=/app/frontend/dist
+WORKDIR /app
+RUN useradd --system --uid 10001 --create-home --shell /usr/sbin/nologin pi-agent \
+  && mkdir -p /data /homeassistant \
+  && chown pi-agent:pi-agent /data
+COPY --from=build /out ./backend
+COPY --from=build /src/packages/frontend/dist ./frontend/dist
+COPY app/rootfs/entrypoint.sh /entrypoint.sh
+COPY app/apparmor.txt /app/apparmor.txt
+RUN chmod 0755 /entrypoint.sh
+USER pi-agent
+EXPOSE 8099
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD node /app/backend/dist/server.js
+ENTRYPOINT ["/entrypoint.sh"]
