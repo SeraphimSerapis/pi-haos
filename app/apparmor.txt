@@ -7,6 +7,7 @@ profile pi_homeassistant_agent flags=(attach_disconnected,mediate_deleted) {
   network inet stream,
   network inet6 stream,
   /app/** r,
+  /opt/pi/** r,
   /app/bin/pi-sandbox ix,
   /usr/** r,
   /lib/** r,
