@@ -27,11 +27,12 @@ def test_apply_and_rollback():
 
 
 def test_rejects_protected_paths():
-    try:
-        apply_approved_transaction("/tmp", {"validation": {"status": "passed"}, "files": [{"path": "secrets.yaml", "content": "x", "originalHash": None, "approved": True}]})
-    except TransactionApplyError:
-        return
-    raise AssertionError("protected path was accepted")
+    for path in ("secrets.yaml", "history.db-2026", "home-assistant.log.1"):
+        try:
+            apply_approved_transaction("/tmp", {"validation": {"status": "passed"}, "files": [{"path": path, "content": "x", "originalHash": None, "approved": True}]})
+        except TransactionApplyError:
+            continue
+        raise AssertionError(f"protected path was accepted: {path}")
 
 
 def test_activation_plan_is_advisory():

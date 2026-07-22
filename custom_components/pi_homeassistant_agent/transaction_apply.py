@@ -97,7 +97,8 @@ def validate_path(relative: str) -> str:
         raise TransactionApplyError("Path traversal is not allowed")
     if parts[0] in DENIED_DIRECTORIES or parts[-1] in DENIED_FILES:
         raise TransactionApplyError("Path is protected")
-    if normalized.endswith(DENIED_SUFFIXES):
+    file_name = parts[-1]
+    if normalized.endswith(DENIED_SUFFIXES) or file_name.startswith((".db-", ".log.")):
         raise TransactionApplyError("File type is protected")
     if normalized.startswith("custom_components/"):
         raise TransactionApplyError("custom_components requires explicit permission")
