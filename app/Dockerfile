@@ -21,10 +21,7 @@ FROM node:24-bookworm-slim
 ENV NODE_ENV=production PORT=8099 HOST=0.0.0.0 FRONTEND_DIST=/app/frontend/dist \
   PI_VERSION=0.81.1 PI_COMMAND=/opt/pi/node_modules/.bin/pi
 WORKDIR /app
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends util-linux \
-  && rm -rf /var/lib/apt/lists/* \
-  && useradd --system --uid 10001 --create-home --shell /usr/sbin/nologin pi-agent \
+RUN useradd --system --uid 10001 --create-home --shell /usr/sbin/nologin pi-agent \
   && mkdir -p /data /homeassistant \
   && chown pi-agent:pi-agent /data
 COPY --from=build /out ./backend
