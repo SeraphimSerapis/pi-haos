@@ -9,14 +9,14 @@ paired companion integration owns approved writes.
 ## Status
 
 The repository now provides a health-checked Home Assistant App, an Ingress
-frontend with Chat, Models, and Skills views, a pinned Pi `0.81.1` runtime,
-supervised JSONL RPC sessions, read-only Home Assistant context routes,
-validated skills, persistent SQLite task metadata, isolated Pi task runs,
-reviewable workspace-to-transaction manifests, transaction safety primitives,
-and a fail-closed Landlock sandbox. The companion integration exposes
-authenticated task and transaction services; validation persistence, live
-transaction application, and full structured-tool wiring remain next
-milestones.
+frontend with Chat, Changes, Tasks, Models, Skills, Audit, and Settings views, a
+pinned Pi `0.81.1` runtime, supervised JSONL RPC sessions, read-only Home
+Assistant context routes, validated skills, persistent SQLite task metadata,
+isolated Pi task runs, reviewable workspace-to-transaction manifests, atomic
+apply with rollback reporting, explicit activation controls, model defaults,
+verified Pi staging, and a fail-closed Landlock/AppArmor boundary. The
+companion integration exposes authenticated task, status, and transaction
+services. Live Home Assistant runtime verification remains outstanding.
 
 ## Development
 
