@@ -1,4 +1,5 @@
 import { PassThrough } from 'node:stream';
+import type { spawn } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import { RpcPiRuntime } from './rpc-runtime.js';
 
@@ -71,11 +72,13 @@ class FakeProcess extends PassThrough {
 describe('RpcPiRuntime', () => {
   it('normalizes structured RPC streaming events and discovers models', async () => {
     let process: FakeProcess | undefined;
+    let spawnedArgs: string[] | undefined;
     const runtime = new RpcPiRuntime({
       piCommand: '/opt/pi',
       launcherPath: '/bin/sh',
       version: { version: '1.0.0', source: 'bundled', path: '/opt/pi' },
-      spawnProcess: (() => {
+      spawnProcess: ((...args: Parameters<typeof spawn>) => {
+        spawnedArgs = Array.from(args[1] ?? []);
         process = new FakeProcess();
         return process as never;
       }) as never,
@@ -84,7 +87,11 @@ describe('RpcPiRuntime', () => {
 
     const session = await runtime.startSession({
       workspace: '/tmp/pi-session',
+      model: { provider: 'openai', modelId: 'gpt-test' },
     });
+    expect(spawnedArgs).toEqual(
+      expect.arrayContaining(['--provider', 'openai', '--model', 'gpt-test']),
+    );
     const events = [];
     for await (const event of runtime.sendMessage(session.id, 'hello'))
       events.push(event);

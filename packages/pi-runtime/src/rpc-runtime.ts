@@ -209,20 +209,29 @@ export class RpcPiRuntime implements PiRuntime {
   async startSession(options: StartSessionOptions): Promise<SessionInfo> {
     await assertSandboxLauncher(this.options.launcherPath);
     const id = options.sessionId ?? randomUUID();
+    const baseArgs = [
+      ...(this.options.piArgs ?? [
+        '--mode',
+        'rpc',
+        '--no-approve',
+        '--no-builtin-tools',
+        '--extension',
+        '/app/pi-tools/ha-tools.ts',
+      ]),
+      ...(options.model
+        ? [
+            '--provider',
+            options.model.provider,
+            '--model',
+            options.model.modelId,
+          ]
+        : []),
+    ];
     const sandboxOptions = {
       launcherPath: this.options.launcherPath,
       workspace: options.workspace,
       command: this.options.piCommand,
-      args: [
-        ...(this.options.piArgs ?? [
-          '--mode',
-          'rpc',
-          '--no-approve',
-          '--no-builtin-tools',
-          '--extension',
-          '/app/pi-tools/ha-tools.ts',
-        ]),
-      ],
+      args: baseArgs,
     };
     const args = buildSandboxArgs(
       options.brokerPort === undefined
