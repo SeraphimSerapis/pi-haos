@@ -3,12 +3,14 @@ import { basename, join } from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { appStatusSchema, type AppStatus } from '@pi-ha/shared';
 import { HomeAssistantClient, readConfigFile } from '@pi-ha/ha-client';
+import { ModelCatalog, type ModelProviderInput } from './model-catalog.js';
 
 const appVersion = process.env.APP_VERSION ?? '0.1.0';
 
 export interface AppOptions {
   haClient?: HomeAssistantClient;
   configRoot?: string;
+  modelCatalog?: ModelCatalog;
 }
 
 export function createApp(options: AppOptions = {}): FastifyInstance {
@@ -23,6 +25,7 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
     });
   const configRoot =
     options.configRoot ?? process.env.HOMEASSISTANT_CONFIG ?? '/homeassistant';
+  const modelCatalog = options.modelCatalog ?? new ModelCatalog();
 
   app.get('/api/v1/health', async () => ({ status: 'ok' }));
 
@@ -70,6 +73,44 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
     },
   );
   app.get('/api/v1/context/check-config', async () => haClient.checkConfig());
+
+  app.get('/api/v1/models/providers', async () => modelCatalog.list());
+  app.put<{ Params: { id: string }; Body: ModelProviderInput }>(
+    '/api/v1/models/providers/:id',
+    async (request, reply) => {
+      if (request.params.id !== request.body?.id)
+        return reply
+          .code(400)
+          .send({ error: 'Path and body provider ids must match' });
+      try {
+        return await modelCatalog.upsert(request.body);
+      } catch (error) {
+        return reply.code(400).send({
+          error: error instanceof Error ? error.message : 'Invalid provider',
+        });
+      }
+    },
+  );
+  app.delete<{ Params: { id: string } }>(
+    '/api/v1/models/providers/:id',
+    async (request) => {
+      await modelCatalog.remove(request.params.id);
+      return { status: 'removed' };
+    },
+  );
+  app.post<{ Params: { id: string } }>(
+    '/api/v1/models/providers/:id/test',
+    async (request, reply) => {
+      const provider = await modelCatalog.get(request.params.id);
+      if (!provider)
+        return reply.code(404).send({ error: 'Provider not found' });
+      return {
+        status: 'configured',
+        providerId: provider.id,
+        modelCount: provider.models.length,
+      };
+    },
+  );
 
   const frontendDist =
     process.env.FRONTEND_DIST ?? join(process.cwd(), '../frontend/dist');
