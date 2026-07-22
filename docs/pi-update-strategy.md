@@ -7,5 +7,9 @@ release manifest. Later releases are installed under `/data/pi/versions/<version
 integrity verification, lifecycle scripts disabled, a capability probe, and a
 mock-provider smoke test. Activation changes an atomic pointer only while all
 sessions and transactions are idle. The previous version is retained for
-rollback; failed health checks automatically restore it. Independent updates
-default to disabled and unattended updates are out of scope for the MVP.
+rollback; failed health checks automatically restore it. The App persists
+`stable`/`pinned` channel selection, enablement, last-check metadata, latest
+version, compatibility, and release notes under `/data/pi`. Independent
+updates default to disabled and unattended updates are out of scope for the
+MVP; remote release discovery is intentionally a separate adapter from the
+integrity-checked staging path.
