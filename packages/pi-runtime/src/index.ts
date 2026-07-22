@@ -5,4 +5,5 @@ export * from './sandbox.js';
 export * from './update-manager.js';
 export * from './update-settings.js';
 export * from './release-catalog.js';
+export * from './release-installer.js';
 export * from './capabilities.js';

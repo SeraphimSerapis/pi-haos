@@ -14,5 +14,10 @@ updates default to disabled and unattended updates are out of scope for the
 MVP. The backend now provides an explicit, read-only stable-channel catalog
 check against npm metadata. It accepts only HTTPS tarballs from the configured
 registry host and valid SHA-512 integrity metadata; it does not download,
-install, or execute a release. Installation remains a separate reviewed step
-through `PiUpdateManager`.
+install, or execute a release. When independent updates are explicitly
+enabled on the stable channel, the Settings view can request installation:
+the installer downloads the tarball, verifies SHA-512 SRI, validates archive
+paths, extracts into a private workspace, rejects symlinks through the package
+scanner, runs the smoke test, and stages the version. It never activates the
+version automatically; activation still requires an idle runtime and explicit
+confirmation.

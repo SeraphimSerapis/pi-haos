@@ -663,7 +663,7 @@ async function renderSettings(): Promise<void> {
           `<label>${escapeHtml(capability)}<select name="${escapeHtml(capability)}"><option value="allow" ${decision === 'allow' ? 'selected' : ''}>Allow</option><option value="ask" ${decision === 'ask' ? 'selected' : ''}>Ask</option><option value="deny" ${decision === 'deny' ? 'selected' : ''}>Deny</option></select></label>`,
       )
       .join('');
-    content.innerHTML = `<section class="card"><h2>Pi runtime</h2><p>Active version: <code>${escapeHtml(status.active)}</code></p><p>Installed: ${escapeHtml(status.installed.join(', ') || 'none')}</p><p>Rollback: <code>${escapeHtml(status.rollback ?? 'unavailable')}</code></p><p>Latest available: <code>${escapeHtml(status.settings.latest ?? 'not checked')}</code> · compatibility: ${escapeHtml(status.settings.compatibility)}</p><p class="muted">Last update check: ${escapeHtml(status.settings.lastCheck ?? 'never')} · ${escapeHtml(status.settings.changelog ?? 'No release notes')}</p><button type="button" id="pi-check-updates">Check for updates</button>${status.rollback ? '<button type="button" id="pi-rollback">Rollback</button>' : ''}<form id="pi-activate-form"><label>Activate installed version<select name="version">${status.installed.map((version) => `<option value="${escapeHtml(version)}">${escapeHtml(version)}</option>`).join('')}</select></label><button type="submit">Activate version</button><p id="pi-update-result" class="muted"></p></form><form id="pi-settings-form"><label><input type="checkbox" name="enabled" ${status.settings.enabled ? 'checked' : ''} /> Enable independent Pi updates</label><label>Release channel<select name="channel"><option value="pinned" ${status.settings.channel === 'pinned' ? 'selected' : ''}>Pinned</option><option value="stable" ${status.settings.channel === 'stable' ? 'selected' : ''}>Stable</option></select></label><button type="submit">Save update settings</button></form></section><section class="card"><h2>Capability policy</h2><p class="muted">Backend-enforced defaults are read-only. “Ask” is recorded as requiring an approval path; it never silently grants authority.</p><form id="policy-form"><div class="grid">${policyRows}</div><button type="submit">Save policy</button><p id="policy-result" class="muted"></p></form></section>`;
+    content.innerHTML = `<section class="card"><h2>Pi runtime</h2><p>Active version: <code>${escapeHtml(status.active)}</code></p><p>Installed: ${escapeHtml(status.installed.join(', ') || 'none')}</p><p>Rollback: <code>${escapeHtml(status.rollback ?? 'unavailable')}</code></p><p>Latest available: <code>${escapeHtml(status.settings.latest ?? 'not checked')}</code> · compatibility: ${escapeHtml(status.settings.compatibility)}</p><p class="muted">Last update check: ${escapeHtml(status.settings.lastCheck ?? 'never')} · ${escapeHtml(status.settings.changelog ?? 'No release notes')}</p><button type="button" id="pi-check-updates">Check for updates</button>${status.settings.enabled && status.settings.channel === 'stable' ? '<button type="button" id="pi-install-update">Install latest (staging only)</button>' : ''}${status.rollback ? '<button type="button" id="pi-rollback">Rollback</button>' : ''}<form id="pi-activate-form"><label>Activate installed version<select name="version">${status.installed.map((version) => `<option value="${escapeHtml(version)}">${escapeHtml(version)}</option>`).join('')}</select></label><button type="submit">Activate version</button><p id="pi-update-result" class="muted"></p></form><form id="pi-settings-form"><label><input type="checkbox" name="enabled" ${status.settings.enabled ? 'checked' : ''} /> Enable independent Pi updates</label><label>Release channel<select name="channel"><option value="pinned" ${status.settings.channel === 'pinned' ? 'selected' : ''}>Pinned</option><option value="stable" ${status.settings.channel === 'stable' ? 'selected' : ''}>Stable</option></select></label><button type="submit">Save update settings</button></form></section><section class="card"><h2>Capability policy</h2><p class="muted">Backend-enforced defaults are read-only. “Ask” is recorded as requiring an approval path; it never silently grants authority.</p><form id="policy-form"><div class="grid">${policyRows}</div><button type="submit">Save policy</button><p id="policy-result" class="muted"></p></form></section>`;
     document
       .querySelector<HTMLButtonElement>('#pi-check-updates')
       ?.addEventListener('click', async () => {
@@ -673,6 +673,23 @@ async function renderSettings(): Promise<void> {
           await renderSettings();
         } catch {
           if (result) result.textContent = 'Pi release check failed.';
+        }
+      });
+    document
+      .querySelector<HTMLButtonElement>('#pi-install-update')
+      ?.addEventListener('click', async () => {
+        const result = document.querySelector<HTMLElement>('#pi-update-result');
+        if (
+          !window.confirm(
+            'Download and stage the latest Pi release? It will not activate automatically.',
+          )
+        )
+          return;
+        try {
+          await api('/pi/update/install', { method: 'POST' });
+          await renderSettings();
+        } catch {
+          if (result) result.textContent = 'Pi release installation failed.';
         }
       });
     document

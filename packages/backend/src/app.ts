@@ -12,6 +12,7 @@ import {
   PiUpdateManager,
   PiUpdateSettingsStore,
   PiReleaseCatalog,
+  PiReleaseInstaller,
   type PiRuntime,
   type SessionInfo,
 } from '@pi-ha/pi-runtime';
@@ -71,6 +72,7 @@ export interface AppOptions {
   taskQueue?: TaskQueue;
   piUpdateSettings?: PiUpdateSettingsStore;
   piReleaseCatalog?: PiReleaseCatalog;
+  piReleaseInstaller?: PiReleaseInstaller;
   modelSettings?: ModelSettingsStore;
 }
 
@@ -163,6 +165,9 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
   const piUpdateSettings =
     options.piUpdateSettings ?? new PiUpdateSettingsStore();
   const piReleaseCatalog = options.piReleaseCatalog ?? new PiReleaseCatalog();
+  const piReleaseInstaller =
+    options.piReleaseInstaller ??
+    new PiReleaseInstaller({ updateManager: piUpdateManager });
   const modelSettings = options.modelSettings ?? new ModelSettingsStore();
 
   app.get('/api/v1/health', async () => ({ status: 'ok' }));
@@ -357,6 +362,45 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
       return reply.code(502).send({
         error:
           error instanceof Error ? error.message : 'Pi release check failed',
+      });
+    }
+  });
+  app.post('/api/v1/pi/update/install', async (request, reply) => {
+    const settings = piUpdateSettings.get();
+    if (!settings.enabled)
+      return reply
+        .code(403)
+        .send({ error: 'Independent Pi updates are disabled' });
+    if (settings.channel !== 'stable')
+      return reply
+        .code(409)
+        .send({ error: 'Install requires the stable update channel' });
+    try {
+      const release = await piReleaseCatalog.check('stable');
+      if (!release)
+        return reply
+          .code(404)
+          .send({ error: 'No stable Pi release is available' });
+      const status = await piReleaseInstaller.install(release);
+      await piUpdateSettings.recordCheck({
+        latest: release.version,
+        changelog: release.description,
+        compatibility: 'unknown',
+      });
+      audit({
+        action: 'pi.update.install',
+        initiator: 'frontend',
+        piVersion: release.version,
+        decision: 'approved',
+        details: { packageName: release.packageName, status },
+      });
+      return { release, status };
+    } catch (error) {
+      return reply.code(409).send({
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Pi release installation failed',
       });
     }
   });

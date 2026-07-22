@@ -124,8 +124,10 @@ export class PiUpdateManager {
       await readFile(this.activePointer, 'utf8').catch(() => '')
     ).trim();
     if (VERSION.test(value) && installed.includes(value)) return value;
-    if (installed.includes(this.bundledVersion)) return this.bundledVersion;
-    return installed.at(-1) ?? this.bundledVersion;
+    // Staging a newer version must never implicitly activate it. The bundled
+    // runtime remains the safe fallback until activate() atomically updates
+    // the pointer.
+    return this.bundledVersion;
   }
 }
 
@@ -158,7 +160,7 @@ async function copyTree(
   }
 }
 
-async function hashTree(root: string): Promise<string> {
+export async function hashTree(root: string): Promise<string> {
   const files: string[] = [];
   let total = 0;
   async function walk(current: string): Promise<void> {
