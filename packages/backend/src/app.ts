@@ -879,7 +879,7 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
       if (!transaction)
         return reply.code(404).send({ error: 'Transaction not found' });
       if (
-        transaction.state !== 'approved' ||
+        !['approved', 'completed'].includes(transaction.state) ||
         transaction.validation.status !== 'passed'
       )
         return reply.code(409).send({
