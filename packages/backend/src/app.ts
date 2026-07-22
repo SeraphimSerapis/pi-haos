@@ -77,7 +77,12 @@ export interface AppOptions {
 }
 
 export function createApp(options: AppOptions = {}): FastifyInstance {
-  const app = Fastify({ logger: process.env.NODE_ENV !== 'test' });
+  const app = Fastify({
+    logger:
+      process.env.NODE_ENV !== 'test'
+        ? { level: process.env.LOG_LEVEL ?? 'info' }
+        : false,
+  });
   const haClient =
     options.haClient ??
     new HomeAssistantClient({

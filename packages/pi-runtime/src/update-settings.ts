@@ -34,7 +34,7 @@ export class PiUpdateSettingsStore {
   constructor(
     private readonly filePath = `${process.env.DATA_DIR ?? '/data'}/pi/update-settings.json`,
   ) {
-    this.settings = load(filePath);
+    this.settings = load(filePath, process.env.PI_UPDATES_ENABLED === 'true');
   }
 
   get(): PiUpdateSettings {
@@ -94,8 +94,9 @@ export class PiUpdateSettingsStore {
   }
 }
 
-function load(filePath: string): PiUpdateSettings {
-  if (!existsSync(filePath)) return { ...defaultPiUpdateSettings };
+function load(filePath: string, initialEnabled: boolean): PiUpdateSettings {
+  if (!existsSync(filePath))
+    return { ...defaultPiUpdateSettings, enabled: initialEnabled };
   try {
     const value = JSON.parse(
       readFileSync(filePath, 'utf8'),
@@ -120,7 +121,7 @@ function load(filePath: string): PiUpdateSettings {
           : 'unknown',
     };
   } catch {
-    return { ...defaultPiUpdateSettings };
+    return { ...defaultPiUpdateSettings, enabled: initialEnabled };
   }
 }
 

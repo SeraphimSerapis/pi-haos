@@ -8,6 +8,11 @@ and `no-new-privileges`. It is useful for checking the App HTTP surface and
 persistence, but it cannot prove Home Assistant Core API semantics or
 companion integration behavior.
 
+The App entrypoint reads Home Assistant's `/data/options.json` and maps the
+declared `log_level`, `diagnostics`, and `independent_pi_updates` options to
+bounded environment settings. Persistent GUI settings remain authoritative
+after their first initialization.
+
 The repository is a normal Git checkout. Keep commits small and run all quality
 gates before pushing.
 
