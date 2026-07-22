@@ -1,5 +1,5 @@
 name: Pi Agent
-version: '0.1.6'
+version: '0.1.7'
 slug: pi_homeassistant_agent
 description: >-
   An experimental, safety-first Pi agent for inspecting and reviewing Home
@@ -34,7 +34,19 @@ options:
   log_level: info
   diagnostics: false
   independent_pi_updates: false
+  terminal_enabled: true
+  default_provider: ''
+  default_model: ''
+  model_catalog: []
 schema:
   log_level: list(trace|debug|info|warn|error)
   diagnostics: bool
   independent_pi_updates: bool
+  terminal_enabled: bool
+  default_provider: str?
+  default_model: str?
+  model_catalog:
+    - provider: str
+      model: str
+      base_url: url?
+      api_key: password?

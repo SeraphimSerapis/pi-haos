@@ -15,10 +15,12 @@ root.innerHTML = `
     input, select, textarea { padding: .55rem; border: 1px solid #8888; border-radius: .35rem; background: Canvas; color: inherit; font: inherit; }
     .muted { opacity: .72; }
     code { font-family: ui-monospace, monospace; }
+    #terminal-output { min-height: 22rem; max-height: 60vh; overflow: auto; background: #111; color: #eee; white-space: pre-wrap; font: 14px ui-monospace, monospace; }
+    #terminal-input { width: 100%; box-sizing: border-box; background: #111; color: #eee; font: 14px ui-monospace, monospace; }
   </style>
   <h1>Pi Agent</h1>
   <p>Safe Home Assistant assistance, staged by default.</p>
-  <nav id="navigation" aria-label="Pi Agent sections">${['Chat', 'Changes', 'Tasks', 'Skills', 'Models', 'Audit', 'Settings'].map((item, index) => `<button type="button" data-section="${item.toLowerCase()}" aria-selected="${index === 0}">${item}</button>`).join('')}</nav>
+  <nav id="navigation" aria-label="Pi Agent sections">${['Terminal', 'Chat', 'Changes', 'Tasks', 'Skills', 'Models', 'Audit', 'Settings'].map((item, index) => `<button type="button" data-section="${item.toLowerCase()}" aria-selected="${index === 0}">${item}</button>`).join('')}</nav>
   <section id="content" aria-live="polite"></section>
 `;
 
@@ -41,6 +43,10 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
 function renderSection(section: string): void {
   if (!content) return;
+  if (section === 'terminal') {
+    renderTerminal();
+    return;
+  }
   if (section === 'models') {
     void renderModels();
     return;
@@ -63,6 +69,46 @@ function renderSection(section: string): void {
   }
   content.innerHTML = `<section class="card"><h2>${escapeHtml(section[0]?.toUpperCase() + section.slice(1))}</h2><p class="muted">This section is scaffolded for the staged, auditable workflow.</p></section>`;
   if (section === 'chat') void renderChat();
+}
+
+let terminalSocket: WebSocket | null = null;
+
+function renderTerminal(): void {
+  if (!content) return;
+  content.innerHTML = `<section class="card"><h2>Pi terminal</h2><p class="muted">This runs Pi inside an isolated staging workspace. Type a command or prompt and press Enter. The App does not expose a general-purpose shell.</p><pre id="terminal-output" aria-live="polite">Connecting to Pi…</pre><form id="terminal-form"><label for="terminal-input">Input</label><textarea id="terminal-input" rows="2" maxlength="8192" placeholder="Ask Pi to inspect your Home Assistant instance…"></textarea><button type="submit">Send</button><button type="button" id="terminal-clear">Clear</button></form></section>`;
+  const output = document.querySelector<HTMLElement>('#terminal-output');
+  const input = document.querySelector<HTMLTextAreaElement>('#terminal-input');
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  terminalSocket?.close();
+  terminalSocket = new WebSocket(
+    `${protocol}//${window.location.host}${base}api/v1/terminal`,
+  );
+  terminalSocket.onopen = () => {
+    if (output) output.textContent = 'Pi terminal connected.\n';
+    input?.focus();
+  };
+  terminalSocket.onmessage = (event) => {
+    if (!output) return;
+    output.textContent += String(event.data);
+    output.scrollTop = output.scrollHeight;
+  };
+  terminalSocket.onerror = () => {
+    if (output) output.textContent += '\n[Terminal connection failed]\n';
+  };
+  document
+    .querySelector<HTMLFormElement>('#terminal-form')
+    ?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const value = input?.value ?? '';
+      if (!value || terminalSocket?.readyState !== WebSocket.OPEN) return;
+      terminalSocket.send(`${value}\n`);
+      if (input) input.value = '';
+    });
+  document
+    .querySelector<HTMLButtonElement>('#terminal-clear')
+    ?.addEventListener('click', () => {
+      if (output) output.textContent = '';
+    });
 }
 
 async function renderStatus(): Promise<void> {

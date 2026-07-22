@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from 'fastify';
+import websocket from '@fastify/websocket';
 import { basename, join } from 'node:path';
 import { mkdir, readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -37,6 +38,7 @@ import { PolicyStore } from './policy-store.js';
 import { KeyedMutex } from './concurrency.js';
 import { TaskQueue, TaskQueueFullError } from './task-queue.js';
 import { ModelSettingsStore, type ModelSelection } from './model-settings.js';
+import { TerminalManager } from './terminal.js';
 
 const appVersion = process.env.APP_VERSION ?? '0.1.0';
 
@@ -174,6 +176,35 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
     options.piReleaseInstaller ??
     new PiReleaseInstaller({ updateManager: piUpdateManager });
   const modelSettings = options.modelSettings ?? new ModelSettingsStore();
+  const terminal = new TerminalManager({
+    launcherPath: process.env.PI_LAUNCHER ?? '/app/bin/pi-sandbox',
+    piCommand: process.env.PI_COMMAND ?? '/opt/pi/node_modules/.bin/pi',
+    toolBrokerUrl: process.env.TOOL_BROKER_URL ?? 'http://127.0.0.1:8099',
+    workspaceRoot: sessionRoot,
+    onStart: (session) => {
+      sessions.set(session.id, {
+        id: session.id,
+        workspace: session.workspace,
+        startedAt: new Date().toISOString(),
+        status: 'idle',
+      });
+      sessionTokens.set(session.id, session.token);
+    },
+    onClose: (id) => {
+      sessions.delete(id);
+      sessionTokens.delete(id);
+    },
+  });
+
+  app.register(websocket);
+  app.get('/api/v1/terminal', { websocket: true }, (socket) => {
+    if (process.env.PI_TERMINAL_ENABLED === 'false') {
+      socket.send('Pi terminal is disabled in App configuration.\r\n');
+      socket.close(1008, 'Terminal disabled');
+      return;
+    }
+    void terminal.attach(socket);
+  });
 
   app.get('/api/v1/health', async () => ({ status: 'ok' }));
   app.get('/api/v1/pairing', async () => pairing.status());

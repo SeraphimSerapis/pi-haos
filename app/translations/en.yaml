@@ -8,3 +8,15 @@ configuration:
   independent_pi_updates:
     name: Independent Pi updates
     description: Allow manually initiated Pi runtime updates from the App UI.
+  terminal_enabled:
+    name: Enable Pi terminal
+    description: Allow the Pi interactive terminal through Home Assistant Ingress.
+  default_provider:
+    name: Default provider
+    description: Pi provider identifier used by the interactive terminal.
+  default_model:
+    name: Default model
+    description: Model identifier used by the interactive terminal.
+  model_catalog:
+    name: Model catalogue
+    description: Provider and model definitions passed to Pi at startup.

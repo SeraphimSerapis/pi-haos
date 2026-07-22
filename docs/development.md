@@ -14,6 +14,13 @@ provides s6 and bashio. The `pi-agent` s6 service reads the declared
 `bashio::config` and exports only bounded environment settings to the Node
 backend. The Node process never reads `/data/options.json` directly.
 
+The Ingress frontend is terminal-first. A single authenticated WebSocket
+session launches Pi in an isolated staging workspace through the existing
+sandbox launcher. The terminal is not a general-purpose shell: Pi is started
+with built-in shell tools disabled and Home Assistant tools are brokered by the
+backend. Terminal input and output are bounded and only one interactive
+terminal session is allowed at a time.
+
 The repository is a normal Git checkout. Keep commits small and run all quality
 gates before pushing.
 

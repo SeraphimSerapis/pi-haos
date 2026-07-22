@@ -4,6 +4,9 @@ set -euo pipefail
 export LOG_LEVEL="$(bashio::config 'log_level' || echo info)"
 export DIAGNOSTICS_ENABLED="$(bashio::config 'diagnostics' || echo false)"
 export PI_UPDATES_ENABLED="$(bashio::config 'independent_pi_updates' || echo false)"
+export PI_DEFAULT_PROVIDER="$(bashio::config 'default_provider' || true)"
+export PI_DEFAULT_MODEL="$(bashio::config 'default_model' || true)"
+export PI_TERMINAL_ENABLED="$(bashio::config 'terminal_enabled' || echo true)"
 
 mkdir -p /data/database /data/sessions /data/transactions \
   /data/skills/bundled /data/skills/installed /data/skills/disabled /data/skills/metadata \
