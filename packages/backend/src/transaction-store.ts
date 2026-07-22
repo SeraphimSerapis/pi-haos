@@ -1,16 +1,59 @@
 import {
   approvedTransactionSchema,
+  reviewTransactionSchema,
+  type ReviewTransaction,
   type ApprovedTransaction,
 } from '@pi-ha/shared';
 
 export class TransactionStore {
-  private readonly transactions = new Map<string, ApprovedTransaction>();
+  private readonly transactions = new Map<string, ReviewTransaction>();
 
-  register(transaction: ApprovedTransaction): void {
+  register(transaction: ReviewTransaction | ApprovedTransaction): void {
     this.transactions.set(
       transaction.id,
-      approvedTransactionSchema.parse(transaction),
+      reviewTransactionSchema.parse({
+        ...transaction,
+        taskId: 'unknown',
+        updatedAt:
+          'approvedAt' in transaction
+            ? transaction.approvedAt
+            : transaction.updatedAt,
+        ...('approvedAt' in transaction
+          ? { approvedAt: transaction.approvedAt }
+          : {}),
+      }),
     );
+  }
+
+  registerReview(transaction: ReviewTransaction): void {
+    this.transactions.set(
+      transaction.id,
+      reviewTransactionSchema.parse(transaction),
+    );
+  }
+
+  get(id: string): ReviewTransaction | undefined {
+    const transaction = this.transactions.get(id);
+    return transaction ? reviewTransactionSchema.parse(transaction) : undefined;
+  }
+
+  approve(id: string, paths?: string[]): ReviewTransaction | undefined {
+    const transaction = this.transactions.get(id);
+    if (!transaction || transaction.state !== 'awaiting_review')
+      return undefined;
+    const selected = paths ? new Set(paths) : null;
+    const approved = reviewTransactionSchema.parse({
+      ...transaction,
+      state: 'approved',
+      updatedAt: new Date().toISOString(),
+      approvedAt: new Date().toISOString(),
+      files: transaction.files.map((file) => ({
+        ...file,
+        approved: selected ? selected.has(file.path) : true,
+      })),
+    });
+    this.transactions.set(id, approved);
+    return approved;
   }
 
   getApproved(id: string): ApprovedTransaction | undefined {
@@ -24,9 +67,9 @@ export class TransactionStore {
     return approvedTransactionSchema.parse(transaction);
   }
 
-  list(): ApprovedTransaction[] {
+  list(): ReviewTransaction[] {
     return [...this.transactions.values()].map((transaction) =>
-      approvedTransactionSchema.parse(transaction),
+      reviewTransactionSchema.parse(transaction),
     );
   }
 }

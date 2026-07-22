@@ -15,6 +15,7 @@ import {
 import { PairingManager } from './pairing.js';
 import { TransactionStore } from './transaction-store.js';
 import { TaskStore } from './task-store.js';
+import { scanWorkspace } from './workspace-scanner.js';
 
 const appVersion = process.env.APP_VERSION ?? '0.1.0';
 
@@ -192,13 +193,19 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
               ? 'cancelled'
               : null;
       if (!state) return reply.code(404).send({ error: 'Unknown task action' });
-      if (
-        state === 'approved' &&
-        taskStore.get(request.params.id)?.state !== 'awaiting_review'
-      )
-        return reply
-          .code(409)
-          .send({ error: 'Only tasks awaiting review can be approved' });
+      const currentTask = taskStore.get(request.params.id);
+      if (state === 'approved') {
+        const transaction = currentTask?.transactionId
+          ? transactionStore.get(currentTask.transactionId)
+          : undefined;
+        if (
+          currentTask?.state !== 'awaiting_review' ||
+          transaction?.state !== 'approved'
+        )
+          return reply.code(409).send({
+            error: 'Approve the reviewed transaction before approving the task',
+          });
+      }
       const task = taskStore.transition(request.params.id, state);
       return task ? task : reply.code(404).send({ error: 'Task not found' });
     },
@@ -344,13 +351,19 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
               ? 'cancelled'
               : null;
       if (!state) return reply.code(404).send({ error: 'Unknown task action' });
-      if (
-        state === 'approved' &&
-        taskStore.get(request.params.id)?.state !== 'awaiting_review'
-      )
-        return reply
-          .code(409)
-          .send({ error: 'Only tasks awaiting review can be approved' });
+      const currentTask = taskStore.get(request.params.id);
+      if (state === 'approved') {
+        const transaction = currentTask?.transactionId
+          ? transactionStore.get(currentTask.transactionId)
+          : undefined;
+        if (
+          currentTask?.state !== 'awaiting_review' ||
+          transaction?.state !== 'approved'
+        )
+          return reply.code(409).send({
+            error: 'Approve the reviewed transaction before approving the task',
+          });
+      }
       const task = taskStore.transition(request.params.id, state);
       return task ? task : reply.code(404).send({ error: 'Task not found' });
     },
@@ -399,6 +412,51 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
         providerId: provider.id,
         modelCount: provider.models.length,
       };
+    },
+  );
+  app.get<{ Params: { id: string } }>(
+    '/api/v1/tasks/:id/review',
+    async (request, reply) => {
+      const task = taskStore.get(request.params.id);
+      if (!task) return reply.code(404).send({ error: 'Task not found' });
+      if (task.state !== 'awaiting_review')
+        return reply.code(409).send({ error: 'Task is not awaiting review' });
+      const transactionId = task.transactionId ?? randomUUID();
+      try {
+        const transaction = await scanWorkspace({
+          workspace: join(sessionRoot, `task-${task.id}`),
+          configRoot,
+          taskId: task.id,
+          transactionId,
+        });
+        transactionStore.registerReview(transaction);
+        taskStore.transition(task.id, 'awaiting_review', { transactionId });
+        return transaction;
+      } catch (error) {
+        return reply.code(400).send({
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Unable to scan staging workspace',
+        });
+      }
+    },
+  );
+  app.post<{ Params: { id: string }; Body: { paths?: string[] } }>(
+    '/api/v1/transactions/:id/approve',
+    async (request, reply) => {
+      const transaction = transactionStore.approve(
+        request.params.id,
+        request.body?.paths,
+      );
+      if (!transaction)
+        return reply
+          .code(409)
+          .send({ error: 'Transaction is not awaiting review' });
+      taskStore.transition(transaction.taskId, 'approved', {
+        transactionId: transaction.id,
+      });
+      return transaction;
     },
   );
 

@@ -13,8 +13,9 @@
   "dependencies": {
     "@pi-ha/ha-client": "workspace:*",
     "@pi-ha/pi-runtime": "workspace:*",
-    "@pi-ha/skills-manager": "workspace:*",
     "@pi-ha/shared": "workspace:*",
+    "@pi-ha/skills-manager": "workspace:*",
+    "@pi-ha/transaction-engine": "workspace:*",
     "fastify": "^5.4.0"
   },
   "devDependencies": {

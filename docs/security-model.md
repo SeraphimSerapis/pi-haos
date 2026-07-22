@@ -14,7 +14,8 @@ Threats include prompt injection in configuration, malicious skills, hostile
 providers, compromised Pi packages, and malformed tool calls. Mitigations are
 typed tools, path allowlists, redaction, size/time limits, one-time pairing
 with a stored integration token, immutable snapshots, hash conflict
-detection, validation, rollback, and an append-only audit trail.
+detection, workspace scanner limits, no-follow regular-file reads, validation,
+rollback, and an append-only audit trail.
 
 Known limitation: local file permissions and encryption at rest cannot protect
 data from a fully compromised App container or Home Assistant host. This is

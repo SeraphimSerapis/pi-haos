@@ -242,7 +242,23 @@ async function renderTransactions(section: string): Promise<void> {
       content.innerHTML = `<section class="card"><h2>${escapeHtml(section[0]?.toUpperCase() + section.slice(1))}</h2><p class="muted">No staged transactions are available.</p></section>`;
       return;
     }
-    content.innerHTML = `<section class="grid">${transactions.map((transaction) => `<article class="card"><h2><code>${escapeHtml(transaction.id)}</code></h2><p>${escapeHtml(transaction.state)} · validation: ${escapeHtml(transaction.validation.status)}</p><p class="muted">${escapeHtml(transaction.files.map((file) => file.path).join(', '))}</p><details><summary>Diff hash</summary><code>${escapeHtml(transaction.diffHash)}</code></details>${transaction.validation.errors.length ? `<pre>${escapeHtml(transaction.validation.errors.join('\\n'))}</pre>` : ''}</article>`).join('')}</section>`;
+    content.innerHTML = `<section class="grid">${transactions.map((transaction) => `<article class="card"><h2><code>${escapeHtml(transaction.id)}</code></h2><p>${escapeHtml(transaction.state)} · validation: ${escapeHtml(transaction.validation.status)}</p><p class="muted">${escapeHtml(transaction.files.map((file) => file.path).join(', '))}</p><details><summary>Diff hash</summary><code>${escapeHtml(transaction.diffHash)}</code></details>${transaction.validation.errors.length ? `<pre>${escapeHtml(transaction.validation.errors.join('\\n'))}</pre>` : ''}${transaction.state === 'awaiting_review' ? `<button type="button" data-transaction-approve="${escapeHtml(transaction.id)}">Approve all files</button>` : ''}</article>`).join('')}</section>`;
+    document
+      .querySelectorAll<HTMLButtonElement>('[data-transaction-approve]')
+      .forEach((button) =>
+        button.addEventListener('click', async () => {
+          button.disabled = true;
+          await api(
+            `/transactions/${encodeURIComponent(button.dataset.transactionApprove ?? '')}/approve`,
+            {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: '{}',
+            },
+          );
+          await renderTransactions('changes');
+        }),
+      );
   } catch {
     content.innerHTML =
       '<section class="card"><p>Could not load transaction history.</p></section>';
@@ -265,7 +281,7 @@ async function renderTasks(): Promise<void> {
         error: string | null;
       }>
     >('/tasks');
-    content.innerHTML = `<section class="card"><h2>Start staged task</h2><form id="task-form"><label>Prompt<textarea name="prompt" rows="4" required maxlength="8192" placeholder="Ask Pi to propose a safe configuration change…"></textarea></label><button type="submit">Create task</button><p id="task-result" class="muted"></p></form></section><section class="grid">${tasks.length ? tasks.map((task) => `<article class="card"><h2><code>${escapeHtml(task.id.slice(0, 8))}</code></h2><p>${escapeHtml(task.state)} · ${escapeHtml(task.initiator)}</p><p>${escapeHtml(task.prompt)}</p><p class="muted">${escapeHtml(task.model ?? 'default model')} · ${escapeHtml(task.skills.join(', ') || 'no skills')}</p>${task.error ? `<pre>${escapeHtml(task.error)}</pre>` : ''}${task.state === 'created' ? `<button type="button" data-task-run="${escapeHtml(task.id)}">Run in staging</button>` : ''}${task.state === 'awaiting_review' ? `<button type="button" data-task-action="approve" data-task-id="${escapeHtml(task.id)}">Approve</button> <button type="button" data-task-action="reject" data-task-id="${escapeHtml(task.id)}">Reject</button>` : ''}</article>`).join('') : '<article class="card"><p class="muted">No tasks recorded.</p></article>'}</section>`;
+    content.innerHTML = `<section class="card"><h2>Start staged task</h2><form id="task-form"><label>Prompt<textarea name="prompt" rows="4" required maxlength="8192" placeholder="Ask Pi to propose a safe configuration change…"></textarea></label><button type="submit">Create task</button><p id="task-result" class="muted"></p></form></section><section class="grid">${tasks.length ? tasks.map((task) => `<article class="card"><h2><code>${escapeHtml(task.id.slice(0, 8))}</code></h2><p>${escapeHtml(task.state)} · ${escapeHtml(task.initiator)}</p><p>${escapeHtml(task.prompt)}</p><p class="muted">${escapeHtml(task.model ?? 'default model')} · ${escapeHtml(task.skills.join(', ') || 'no skills')}</p>${task.error ? `<pre>${escapeHtml(task.error)}</pre>` : ''}${task.state === 'created' ? `<button type="button" data-task-run="${escapeHtml(task.id)}">Run in staging</button>` : ''}${task.state === 'awaiting_review' ? '<p class="muted">Review and approve the generated transaction in Changes.</p>' : ''}</article>`).join('') : '<article class="card"><p class="muted">No tasks recorded.</p></article>'}</section>`;
     document
       .querySelector<HTMLFormElement>('#task-form')
       ?.addEventListener('submit', async (event) => {

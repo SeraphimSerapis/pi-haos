@@ -57,14 +57,43 @@ export const transactionFileSchema = z.object({
   path: z.string(),
   content: z.string(),
   originalHash: z.string().nullable(),
-  approved: z.literal(true),
+  approved: z.boolean(),
 });
+
+export const reviewTransactionSchema = z.object({
+  id: z.string(),
+  taskId: z.string(),
+  state: z.enum([
+    'awaiting_review',
+    'approved',
+    'validating',
+    'applying',
+    'rejected',
+    'conflicted',
+  ]),
+  diffHash: z.string(),
+  files: z.array(transactionFileSchema).max(100),
+  validation: z.object({
+    status: z.enum(['passed', 'pending', 'failed']),
+    errors: z.array(z.string()).max(100),
+  }),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  approvedAt: z.string().optional(),
+});
+export type ReviewTransaction = z.infer<typeof reviewTransactionSchema>;
 
 export const approvedTransactionSchema = z.object({
   id: z.string(),
   state: z.enum(['approved', 'validating', 'applying']),
   diffHash: z.string(),
-  files: z.array(transactionFileSchema).max(100),
+  files: z
+    .array(transactionFileSchema)
+    .max(100)
+    .refine(
+      (files) => files.every((file) => file.approved),
+      'All files must be approved',
+    ),
   validation: z.object({
     status: z.enum(['passed', 'pending', 'failed']),
     errors: z.array(z.string()).max(100),

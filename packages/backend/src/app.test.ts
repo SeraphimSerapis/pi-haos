@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { HomeAssistantClient } from '@pi-ha/ha-client';
 import type { PiRuntime } from '@pi-ha/pi-runtime';
 import { MockPiRuntime } from '@pi-ha/pi-runtime';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PairingManager } from './pairing.js';
@@ -107,14 +107,21 @@ describe('staged task routes', () => {
       url: `/api/v1/tasks/${id}/run`,
     });
     expect(staged.statusCode).toBe(200);
-    const approved = await app.inject({
-      method: 'POST',
-      url: `/api/v1/tasks/${id}/approve`,
+    const review = await app.inject({
+      method: 'GET',
+      url: `/api/v1/tasks/${id}/review`,
     });
-    expect(approved.statusCode).toBe(200);
-    expect(approved.json().state).toBe('approved');
+    expect(review.statusCode).toBe(200);
+    const reviewed = review.json() as { id: string };
+    const transactionApproval = await app.inject({
+      method: 'POST',
+      url: `/api/v1/transactions/${reviewed.id}/approve`,
+      payload: {},
+    });
+    expect(transactionApproval.statusCode).toBe(200);
     const listed = await app.inject({ method: 'GET', url: '/api/v1/tasks' });
     expect(listed.json()).toHaveLength(1);
+    expect(listed.json()[0].state).toBe('approved');
     await app.close();
     taskStore.close();
     await rm(root, { recursive: true, force: true });
@@ -122,11 +129,15 @@ describe('staged task routes', () => {
 
   it('runs a new task in an isolated workspace and stops for review', async () => {
     const root = await mkdtemp(join(tmpdir(), 'pi-task-run-'));
+    const configRoot = join(root, 'config');
+    await mkdir(configRoot);
+    await writeFile(join(configRoot, 'automations.yaml'), 'old\n');
     const taskStore = new TaskStore(':memory:');
     const app = createApp({
       taskStore,
       piRuntime: new MockPiRuntime(),
       sessionRoot: root,
+      configRoot,
       haClient: {} as HomeAssistantClient,
     });
     await app.ready();
@@ -146,6 +157,17 @@ describe('staged task routes', () => {
         .json()
         .events.some((event: { type: string }) => event.type === 'text_delta'),
     ).toBe(true);
+    const id = created.json().id as string;
+    await writeFile(join(root, `task-${id}`, 'automations.yaml'), 'new\n');
+    const review = await app.inject({
+      method: 'GET',
+      url: `/api/v1/tasks/${id}/review`,
+    });
+    expect(review.statusCode).toBe(200);
+    expect(review.json().files[0]).toMatchObject({
+      path: 'automations.yaml',
+      approved: false,
+    });
     await app.close();
     taskStore.close();
     await rm(root, { recursive: true, force: true });
