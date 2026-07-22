@@ -1,0 +1,36 @@
+run_prompt:
+  name: Run prompt
+  description: Run an isolated read-only prompt through the Pi Agent App.
+  fields:
+    prompt:
+      required: true
+      selector: {text: {multiline: true}}
+    model:
+      required: false
+      selector: {text: {}}
+start_task:
+  name: Start task
+  description: Start a staged task that may later require approval.
+  fields:
+    prompt:
+      required: true
+      selector: {text: {multiline: true}}
+    model:
+      required: false
+      selector: {text: {}}
+cancel_task:
+  name: Cancel task
+  description: Cancel a queued or active task.
+  fields: {task_id: {required: true, selector: {text: {}}}}
+approve_task:
+  name: Approve task
+  description: Approve a reviewed staged task.
+  fields: {task_id: {required: true, selector: {text: {}}}}
+reject_task:
+  name: Reject task
+  description: Reject a reviewed staged task.
+  fields: {task_id: {required: true, selector: {text: {}}}}
+reload_domain:
+  name: Reload domain
+  description: Request an explicit Home Assistant domain reload.
+  fields: {domain: {required: true, selector: {text: {}}}}

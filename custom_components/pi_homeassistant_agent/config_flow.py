@@ -4,6 +4,7 @@ from homeassistant import config_entries
 import voluptuous as vol
 
 from . import DOMAIN
+from .const import CONF_APP_URL, CONF_PAIRING_CODE
 
 
 class PiAgentConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -19,7 +20,7 @@ class PiAgentConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
-                vol.Required("app_url"): str,
-                vol.Required("pairing_code"): str,
+                vol.Required(CONF_APP_URL): vol.All(str, vol.Length(min=8, max=512)),
+                vol.Required(CONF_PAIRING_CODE): vol.All(str, vol.Length(min=8, max=256)),
             }),
         )
