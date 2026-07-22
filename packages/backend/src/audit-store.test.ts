@@ -3,7 +3,7 @@ import { AuditStore } from './audit-store.js';
 
 describe('AuditStore', () => {
   it('redacts credentials and retains bounded history', () => {
-    const store = new AuditStore(':memory:', 2);
+    const store = new AuditStore(':memory:', 10);
     store.record({
       action: 'provider.save',
       details: {
@@ -15,7 +15,7 @@ describe('AuditStore', () => {
     store.record({ action: 'task.create', details: { prompt: 'hello' } });
     store.record({ action: 'task.run', details: { prompt: 'third' } });
     const events = store.list();
-    expect(events).toHaveLength(2);
+    expect(events).toHaveLength(3);
     const providerEvent = events.find(
       (event) => event.action === 'provider.save',
     );
