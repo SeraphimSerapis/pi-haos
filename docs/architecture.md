@@ -37,3 +37,8 @@ redacts inputs, and authenticates the call with a per-session token. The token
 is never returned to the Ingress browser or passed as a Supervisor credential.
 Capability policy updates are backend-enforced and immediately replace the
 broker policy for subsequent tool calls.
+
+The companion integration routes reload and restart requests through the
+authenticated bridge. The bridge accepts only the fixed automation, script,
+scene, template, and Home Assistant restart actions; it requires explicit
+confirmation, re-validates Core configuration, and records the action.
