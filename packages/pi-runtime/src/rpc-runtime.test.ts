@@ -20,7 +20,10 @@ class FakeProcess extends PassThrough {
           this.stdout.write(
             JSON.stringify({
               type: 'message_update',
-              assistantMessageEvent: { type: 'text_delta', delta: 'hello' },
+              assistantMessageEvent: {
+                type: 'text_delta',
+                delta: 'hello\u2028world',
+              },
             }) + '\n',
           );
           this.stdout.write(JSON.stringify({ type: 'agent_end' }) + '\n');
@@ -87,7 +90,7 @@ describe('RpcPiRuntime', () => {
       events.push(event);
     expect(events).toEqual([
       { type: 'status', status: 'started' },
-      { type: 'text_delta', delta: 'hello' },
+      { type: 'text_delta', delta: 'hello\u2028world' },
       { type: 'status', status: 'completed' },
     ]);
     expect(await runtime.listModels()).toEqual([{ id: 'mock' }]);

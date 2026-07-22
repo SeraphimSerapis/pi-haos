@@ -1,5 +1,4 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { createInterface } from 'node:readline';
 import { randomUUID } from 'node:crypto';
 import { AsyncQueue } from './queue.js';
 import { assertSandboxLauncher, buildSandboxArgs } from './sandbox.js';
@@ -49,8 +48,20 @@ class RpcSession {
     this.info = info;
     this.process = process;
     this.maxLineBytes = maxLineBytes;
-    const lines = createInterface({ input: process.stdout });
-    lines.on('line', (line) => this.handleLine(line));
+    let stdoutBuffer = Buffer.alloc(0);
+    process.stdout.on('data', (chunk: Buffer | string) => {
+      stdoutBuffer = Buffer.concat([stdoutBuffer, Buffer.from(chunk)]);
+      let newline = stdoutBuffer.indexOf(0x0a);
+      while (newline >= 0) {
+        let line = stdoutBuffer.subarray(0, newline);
+        if (line.at(-1) === 0x0d) line = line.subarray(0, line.length - 1);
+        this.handleLine(line.toString('utf8'));
+        stdoutBuffer = stdoutBuffer.subarray(newline + 1);
+        newline = stdoutBuffer.indexOf(0x0a);
+      }
+      if (stdoutBuffer.byteLength > this.maxLineBytes)
+        this.fail(new Error('Pi RPC line exceeded limit'));
+    });
     process.stderr.on('data', (chunk: Buffer) => {
       if (chunk.byteLength > this.maxLineBytes)
         this.fail(new Error('Pi stderr line exceeded limit'));
