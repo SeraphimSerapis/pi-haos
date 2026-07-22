@@ -5,6 +5,7 @@ import type { PiRuntime } from '@pi-ha/pi-runtime';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { PairingManager } from './pairing.js';
 import { createApp } from './app.js';
 
 describe('backend health API', () => {
@@ -130,5 +131,56 @@ describe('isolated Pi chat routes', () => {
     expect(runtime.closeSession).toHaveBeenCalledWith(session.id);
     await app.close();
     await rm(sessionRoot, { recursive: true, force: true });
+  });
+
+  it('fails closed for bridge calls without the exchanged token', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'pi-bridge-'));
+    const pairing = new PairingManager(join(root, 'pairing.json'));
+    const code = (await pairing.status()).pairingCode ?? '';
+    const token = await pairing.exchange(code);
+    const runtime = {
+      healthCheck: vi.fn(async () => ({
+        healthy: true,
+        version: null,
+        capabilities: null,
+        activeSessions: 0,
+      })),
+      startSession: vi.fn(async (options) => ({
+        id: options.sessionId ?? 'bridge',
+        workspace: options.workspace,
+        startedAt: new Date().toISOString(),
+        status: 'idle' as const,
+      })),
+      sendMessage: vi.fn(async function* () {
+        yield { type: 'text_delta' as const, delta: 'bridge response' };
+      }),
+      closeSession: vi.fn(async () => {}),
+    } as unknown as PiRuntime;
+    const app = createApp({
+      piRuntime: runtime,
+      pairingManager: pairing,
+      sessionRoot: root,
+      haClient: {} as HomeAssistantClient,
+    });
+    await app.ready();
+    await expect(
+      app.inject({
+        method: 'POST',
+        url: '/api/v1/bridge/run-prompt',
+        payload: { prompt: 'hello' },
+      }),
+    ).resolves.toMatchObject({ statusCode: 401 });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/bridge/run-prompt',
+      headers: { 'x-pi-integration-token': token },
+      payload: { prompt: 'hello' },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().events).toEqual([
+      { type: 'text_delta', delta: 'bridge response' },
+    ]);
+    await app.close();
+    await rm(root, { recursive: true, force: true });
   });
 });
