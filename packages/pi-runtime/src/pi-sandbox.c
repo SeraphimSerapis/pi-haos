@@ -19,6 +19,21 @@
 #ifndef LANDLOCK_CREATE_RULESET_VERSION
 #define LANDLOCK_CREATE_RULESET_VERSION (1ULL << 0)
 #endif
+#ifndef LANDLOCK_RULE_NET_PORT
+#define LANDLOCK_RULE_NET_PORT 2
+#endif
+
+/* These layouts are stable kernel UAPI structs, but older libc headers may
+ * not declare them yet. Keep local declarations so the multi-arch builder can
+ * compile against an older linux-libc-dev while still probing ABI 4 at run time. */
+struct pi_landlock_ruleset_attr {
+  __u64 handled_access_fs;
+  __u64 handled_access_net;
+};
+struct pi_landlock_net_port_attr {
+  __u64 allowed_access;
+  __u64 port;
+};
 
 static int landlock_create(const struct landlock_ruleset_attr *attr, size_t size, __u32 flags) {
   return (int)syscall(__NR_landlock_create_ruleset, attr, size, flags);
@@ -32,7 +47,7 @@ static int landlock_add_path(int ruleset, const char *path, __u64 access) {
   return result;
 }
 static int landlock_add_port(int ruleset, unsigned short port) {
-  struct landlock_net_port_attr rule = { .allowed_access = LANDLOCK_ACCESS_NET_CONNECT_TCP, .port = port };
+  struct pi_landlock_net_port_attr rule = { .allowed_access = LANDLOCK_ACCESS_NET_CONNECT_TCP, .port = port };
   return (int)syscall(__NR_landlock_add_rule, ruleset, LANDLOCK_RULE_NET_PORT, &rule, 0);
 }
 
@@ -59,7 +74,7 @@ int main(int argc, char **argv) {
     LANDLOCK_ACCESS_FS_REMOVE_FILE | LANDLOCK_ACCESS_FS_MAKE_CHAR | LANDLOCK_ACCESS_FS_MAKE_DIR |
     LANDLOCK_ACCESS_FS_MAKE_REG | LANDLOCK_ACCESS_FS_MAKE_SOCK | LANDLOCK_ACCESS_FS_MAKE_FIFO |
     LANDLOCK_ACCESS_FS_MAKE_BLOCK | LANDLOCK_ACCESS_FS_MAKE_SYM | LANDLOCK_ACCESS_FS_REFER;
-  struct landlock_ruleset_attr ruleset_attr = { .handled_access_fs = fs_access, .handled_access_net = LANDLOCK_ACCESS_NET_CONNECT_TCP };
+  struct pi_landlock_ruleset_attr ruleset_attr = { .handled_access_fs = fs_access, .handled_access_net = LANDLOCK_ACCESS_NET_CONNECT_TCP };
   int ruleset = landlock_create(&ruleset_attr, sizeof(ruleset_attr), 0);
   if (ruleset < 0) fail("cannot create Landlock ruleset");
 
