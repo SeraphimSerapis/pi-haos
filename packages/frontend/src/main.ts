@@ -84,13 +84,32 @@ let chatSessionId: string | null = null;
 
 async function renderChat(): Promise<void> {
   if (!content) return;
-  content.innerHTML = `<section class="card"><h2>Chat</h2><p class="muted">Pi works in an isolated workspace. Configuration changes remain staged for review.</p><form id="chat-form"><label>Message<textarea name="message" rows="5" required maxlength="8192" placeholder="Ask Pi to inspect your Home Assistant instance…"></textarea></label><button type="submit">Send</button></form><pre id="chat-output" class="card" aria-live="polite"></pre></section>`;
+  let modelOptions = '<option value="">Runtime default</option>';
+  try {
+    const providers =
+      await api<
+        Array<{ id: string; name: string; models: string[]; enabled: boolean }>
+      >('/models/providers');
+    modelOptions += providers
+      .filter((provider) => provider.enabled)
+      .flatMap((provider) =>
+        provider.models.map(
+          (model) =>
+            `<option value="${escapeHtml(`${provider.id}:${model}`)}">${escapeHtml(`${provider.name} · ${model}`)}</option>`,
+        ),
+      )
+      .join('');
+  } catch {
+    // Chat remains usable with the runtime default when the catalogue is unavailable.
+  }
+  content.innerHTML = `<section class="card"><h2>Chat</h2><p class="muted">Pi works in an isolated workspace. Configuration changes remain staged for review.</p><form id="chat-form"><label>Model<select name="model">${modelOptions}</select></label><label>Message<textarea name="message" rows="5" required maxlength="8192" placeholder="Ask Pi to inspect your Home Assistant instance…"></textarea></label><button type="submit">Send</button></form><pre id="chat-output" class="card" aria-live="polite"></pre></section>`;
   document
     .querySelector<HTMLFormElement>('#chat-form')
     ?.addEventListener('submit', async (event) => {
       event.preventDefault();
       const form = new FormData(event.currentTarget as HTMLFormElement);
       const message = String(form.get('message') ?? '').trim();
+      const selectedModel = String(form.get('model') ?? '');
       const output = document.querySelector<HTMLElement>('#chat-output');
       if (!message || !output) return;
       output.textContent = 'Pi is thinking…';
@@ -99,7 +118,16 @@ async function renderChat(): Promise<void> {
           const session = await api<{ id: string }>('/chat/sessions', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: '{}',
+            body: JSON.stringify(
+              selectedModel
+                ? (() => {
+                    const [provider, ...modelParts] = selectedModel.split(':');
+                    return {
+                      model: { provider, modelId: modelParts.join(':') },
+                    };
+                  })()
+                : {},
+            ),
           });
           chatSessionId = session.id;
         }
@@ -424,7 +452,29 @@ async function renderTasks(): Promise<void> {
         maxQueued: number;
       }>('/tasks/queue'),
     ]);
-    content.innerHTML = `<section class="card"><h2>Start staged task</h2><p class="muted">Queue: ${queue.active} active · ${queue.queued} waiting (limit ${queue.maxConcurrent}/${queue.maxQueued})</p><form id="task-form"><label>Prompt<textarea name="prompt" rows="4" required maxlength="8192" placeholder="Ask Pi to propose a safe configuration change…"></textarea></label><button type="submit">Create task</button><p id="task-result" class="muted"></p></form></section><section class="grid">${tasks.length ? tasks.map((task) => `<article class="card"><h2><code>${escapeHtml(task.id.slice(0, 8))}</code></h2><p>${escapeHtml(task.state)} · ${escapeHtml(task.initiator)}</p><p>${escapeHtml(task.prompt)}</p><p class="muted">${escapeHtml(task.model ?? 'default model')} · ${escapeHtml(task.skills.join(', ') || 'no skills')}</p>${task.error ? `<pre>${escapeHtml(task.error)}</pre>` : ''}${task.state === 'created' ? `<button type="button" data-task-run="${escapeHtml(task.id)}">Run in staging</button>` : ''}${task.state === 'awaiting_review' ? '<p class="muted">Review and approve the generated transaction in Changes.</p>' : ''}</article>`).join('') : '<article class="card"><p class="muted">No tasks recorded.</p></article>'}</section>`;
+    let modelOptions = '<option value="">Runtime default</option>';
+    try {
+      const providers = await api<
+        Array<{
+          id: string;
+          name: string;
+          models: string[];
+          enabled: boolean;
+        }>
+      >('/models/providers');
+      modelOptions += providers
+        .filter((provider) => provider.enabled)
+        .flatMap((provider) =>
+          provider.models.map(
+            (model) =>
+              `<option value="${escapeHtml(`${provider.id}:${model}`)}">${escapeHtml(`${provider.name} · ${model}`)}</option>`,
+          ),
+        )
+        .join('');
+    } catch {
+      // Staged tasks can still use the runtime default.
+    }
+    content.innerHTML = `<section class="card"><h2>Start staged task</h2><p class="muted">Queue: ${queue.active} active · ${queue.queued} waiting (limit ${queue.maxConcurrent}/${queue.maxQueued})</p><form id="task-form"><label>Model<select name="model">${modelOptions}</select></label><label>Prompt<textarea name="prompt" rows="4" required maxlength="8192" placeholder="Ask Pi to propose a safe configuration change…"></textarea></label><button type="submit">Create task</button><p id="task-result" class="muted"></p></form></section><section class="grid">${tasks.length ? tasks.map((task) => `<article class="card"><h2><code>${escapeHtml(task.id.slice(0, 8))}</code></h2><p>${escapeHtml(task.state)} · ${escapeHtml(task.initiator)}</p><p>${escapeHtml(task.prompt)}</p><p class="muted">${escapeHtml(task.model ?? 'default model')} · ${escapeHtml(task.skills.join(', ') || 'no skills')}</p>${task.error ? `<pre>${escapeHtml(task.error)}</pre>` : ''}${task.state === 'created' ? `<button type="button" data-task-run="${escapeHtml(task.id)}">Run in staging</button>` : ''}${task.state === 'awaiting_review' ? '<p class="muted">Review and approve the generated transaction in Changes.</p>' : ''}</article>`).join('') : '<article class="card"><p class="muted">No tasks recorded.</p></article>'}</section>`;
     document
       .querySelector<HTMLFormElement>('#task-form')
       ?.addEventListener('submit', async (event) => {
@@ -438,6 +488,7 @@ async function renderTasks(): Promise<void> {
             body: JSON.stringify({
               prompt: form.get('prompt'),
               initiator: 'frontend',
+              model: form.get('model') || null,
             }),
           });
           await renderTasks();
