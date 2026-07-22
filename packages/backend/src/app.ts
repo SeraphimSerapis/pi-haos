@@ -67,7 +67,7 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
     options.transactionStore ??
     new TransactionStore(
       process.env.TRANSACTION_DATABASE ??
-        (process.env.NODE_ENV === 'test'
+        (process.env.NODE_ENV === 'test' || process.env.VITEST === 'true'
           ? ':memory:'
           : join(
               process.env.DATA_DIR ?? '/data',
@@ -80,6 +80,7 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
     new TaskStore(
       process.env.TASK_DATABASE ??
         (process.env.NODE_ENV === 'test'
+          || process.env.VITEST === 'true'
           ? ':memory:'
           : join(process.env.DATA_DIR ?? '/data', 'database', 'tasks.sqlite')),
     );
