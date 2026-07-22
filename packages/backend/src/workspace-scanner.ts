@@ -2,8 +2,40 @@ import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 import { lstat, open, readdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
-import { assertAllowedPath } from '@pi-ha/transaction-engine';
 import { reviewTransactionSchema, type ReviewTransaction } from '@pi-ha/shared';
+
+const deniedFiles = new Set(['secrets.yaml', '.HA_VERSION']);
+const deniedDirectories = new Set(['.storage', '.cloud']);
+
+function assertAllowedPath(requestedPath: string): string {
+  if (
+    !requestedPath ||
+    requestedPath.startsWith('/') ||
+    requestedPath.includes('\0')
+  )
+    throw new Error('Path must be relative');
+  const path = requestedPath.replaceAll('\\', '/');
+  const parts = path.split('/');
+  if (parts.includes('..') || parts[0] === '')
+    throw new Error('Path traversal is not allowed');
+  if (
+    deniedFiles.has(parts.at(-1) ?? '') ||
+    deniedDirectories.has(parts[0] ?? '')
+  )
+    throw new Error('Path is protected');
+  if (
+    path.endsWith('.db') ||
+    path.endsWith('.db-shm') ||
+    path.endsWith('.db-wal') ||
+    path.endsWith('.log') ||
+    path.includes('.db-') ||
+    path.includes('.log.')
+  )
+    throw new Error('File type is protected');
+  if (path.startsWith('custom_components/'))
+    throw new Error('custom_components requires explicit permission');
+  return path;
+}
 
 const MAX_FILES = 100;
 const MAX_FILE_BYTES = 256 * 1024;
