@@ -35,6 +35,8 @@ struct pi_landlock_net_port_attr {
   __u64 port;
 };
 
+static void fail(const char *message);
+
 static int landlock_create(const struct landlock_ruleset_attr *attr, size_t size, __u32 flags) {
   return (int)syscall(__NR_landlock_create_ruleset, attr, size, flags);
 }
@@ -45,6 +47,17 @@ static int landlock_add_path(int ruleset, const char *path, __u64 access) {
   int result = (int)syscall(__NR_landlock_add_rule, ruleset, LANDLOCK_RULE_PATH_BENEATH, &rule, 0);
   close(fd);
   return result;
+}
+static void landlock_deny_optional(int ruleset, const char *path) {
+  int fd = open(path, O_PATH | O_CLOEXEC);
+  if (fd < 0) {
+    if (errno == ENOENT) return;
+    fail("cannot inspect protected path");
+  }
+  struct landlock_path_beneath_attr rule = { .parent_fd = fd, .allowed_access = 0 };
+  if (syscall(__NR_landlock_add_rule, ruleset, LANDLOCK_RULE_PATH_BENEATH, &rule, 0) < 0)
+    fail("cannot deny protected path");
+  close(fd);
 }
 static int landlock_add_port(int ruleset, unsigned short port) {
   struct pi_landlock_net_port_attr rule = { .allowed_access = LANDLOCK_ACCESS_NET_CONNECT_TCP, .port = port };
@@ -82,6 +95,10 @@ int main(int argc, char **argv) {
   if (landlock_add_path(ruleset, "/app", read_only) < 0) fail("cannot allow runtime files");
   if (landlock_add_path(ruleset, "/opt/pi", read_only) < 0) fail("cannot allow Pi runtime");
   if (landlock_add_path(ruleset, "/homeassistant", read_only) < 0) fail("cannot allow Home Assistant config");
+  /* Structured backend tools redact these paths; Pi must not read them directly. */
+  landlock_deny_optional(ruleset, "/homeassistant/secrets.yaml");
+  landlock_deny_optional(ruleset, "/homeassistant/.storage");
+  landlock_deny_optional(ruleset, "/homeassistant/.cloud");
   if (landlock_add_path(ruleset, "/usr", read_only) < 0) fail("cannot allow system libraries");
   if (landlock_add_path(ruleset, "/lib", read_only) < 0) fail("cannot allow libraries");
   if (landlock_add_path(ruleset, "/lib64", read_only) < 0 && errno != ENOENT) fail("cannot allow libraries");

@@ -13,6 +13,8 @@ skills, transaction snapshots, logs, and databases are under `/data`, never
 under `/config`. Pi receives a scrubbed environment and no Supervisor token.
 The Pi runtime now launches through a fail-closed Landlock sandbox; AppArmor is
 an additional container-wide control, not a substitute for process isolation.
+Pi's direct filesystem view explicitly denies `secrets.yaml`, `.storage/**`,
+and `.cloud/**`; those values are not available through structured tools either.
 
 Threats include prompt injection in configuration, malicious skills, hostile
 providers, compromised Pi packages, and malformed tool calls. Mitigations are
