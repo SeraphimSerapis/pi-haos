@@ -58,6 +58,7 @@ export const transactionFileSchema = z.object({
   content: z.string(),
   originalHash: z.string().nullable(),
   approved: z.boolean(),
+  diff: z.string().max(1_048_576).optional(),
 });
 
 export const reviewTransactionSchema = z.object({

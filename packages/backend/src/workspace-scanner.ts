@@ -90,13 +90,15 @@ export async function scanWorkspace(
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
+    const diff = unifiedDiff(path, original, content.toString('utf8'));
     files.push({
       path,
       content: content.toString('utf8'),
       originalHash: original === null ? null : hash(original),
       approved: false,
+      diff,
     });
-    diffs.push(unifiedDiff(path, original, content.toString('utf8')));
+    diffs.push(diff);
   }
   const now = new Date().toISOString();
   return reviewTransactionSchema.parse({

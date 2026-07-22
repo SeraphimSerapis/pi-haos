@@ -26,6 +26,8 @@ describe('workspace scanner', () => {
       approved: false,
     });
     expect(transaction.files[0]?.originalHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(transaction.files[0]?.diff).toContain('--- a/automations.yaml');
+    expect(transaction.files[0]?.diff).toContain('+new');
     expect(transaction.diffHash).toMatch(/^[a-f0-9]{64}$/);
     await rm(root, { recursive: true, force: true });
   });
