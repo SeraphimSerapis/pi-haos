@@ -1,5 +1,5 @@
 name: Pi Agent
-version: '0.1.8'
+version: '0.1.9'
 slug: pi_homeassistant_agent
 description: >-
   An experimental, safety-first Pi agent for inspecting and reviewing Home
@@ -13,7 +13,7 @@ startup: application
 init: false
 boot: auto
 ingress: true
-ingress_port: 8099
+ingress_port: 7681
 ingress_stream: true
 panel_icon: mdi:robot-outline
 panel_title: Pi Agent

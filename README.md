@@ -8,8 +8,9 @@ paired companion integration owns approved writes.
 
 ## Status
 
-The repository now provides a health-checked Home Assistant App, an Ingress
-frontend with Chat, Changes, Tasks, Models, Skills, Audit, and Settings views, a
+The repository now provides a health-checked Home Assistant App, a native Pi
+TUI rendered through Home Assistant Ingress, an internal API with Chat,
+Changes, Tasks, Models, Skills, Audit, and Settings views, a
 pinned Pi `0.81.1` runtime, supervised JSONL RPC sessions, read-only Home
 Assistant context routes, validated skills, persistent SQLite task metadata,
 isolated Pi task runs, reviewable workspace-to-transaction manifests, atomic

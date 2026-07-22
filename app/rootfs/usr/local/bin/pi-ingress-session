@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+session_id="ingress-$(date +%s)-$$"
+workspace="/data/sessions/${session_id}"
+mkdir -p "${workspace}/.pi/agent/skills"
+
+# App options are materialized by the pi-agent service outside the sandbox.
+# Copy only the generated model catalogue into this session's private HOME.
+if [ -f /data/pi/home/.pi/agent/models.json ]; then
+  cp /data/pi/home/.pi/agent/models.json "${workspace}/.pi/agent/models.json"
+  chmod 0600 "${workspace}/.pi/agent/models.json"
+fi
+
+# Skills are immutable image content copied into the writable session so Pi's
+# native discovery rules can load them without granting it /data broadly.
+if [ -d /app/bundled-skills ]; then
+  for skill in /app/bundled-skills/*; do
+    [ -d "${skill}" ] || continue
+    cp -R "${skill}" "${workspace}/.pi/agent/skills/"
+  done
+fi
+
+exec /app/bin/pi-sandbox \
+  --workspace "${workspace}" \
+  -- /opt/pi/node_modules/.bin/pi

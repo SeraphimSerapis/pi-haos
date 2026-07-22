@@ -14,12 +14,15 @@ provides s6 and bashio. The `pi-agent` s6 service reads the declared
 `bashio::config` and exports only bounded environment settings to the Node
 backend. The Node process never reads `/data/options.json` directly.
 
-The Ingress frontend is terminal-first. A single authenticated WebSocket
-session launches Pi in an isolated staging workspace through the existing
-sandbox launcher. The terminal is not a general-purpose shell: Pi is started
-with built-in shell tools disabled and Home Assistant tools are brokered by the
-backend. Terminal input and output are bounded and only one interactive
-terminal session is allowed at a time.
+Home Assistant Ingress opens `ttyd`, which renders Pi's native interactive TUI
+directly. This is the same deployment pattern used by the SSH App: the App
+does not implement a browser terminal or translate terminal input into a custom
+web UI. Each connection gets an isolated staging workspace through the
+Landlock sandbox launcher. The live `/homeassistant` mount remains read-only.
+
+The Fastify frontend/API remains available on the internal port for health,
+structured tools, the companion integration, and future review screens; it is
+not the primary Ingress surface.
 
 The repository is a normal Git checkout. Keep commits small and run all quality
 gates before pushing.

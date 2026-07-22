@@ -1,0 +1,14 @@
+#!/command/with-contenv bashio
+set -euo pipefail
+
+if [ "$(bashio::config 'terminal_enabled' || echo true)" != "true" ]; then
+  bashio::log.info 'Native Pi TUI is disabled in App configuration.'
+  exec sleep infinity
+fi
+
+exec ttyd \
+  --port 7681 \
+  --interface 0.0.0.0 \
+  --writable \
+  --check-origin false \
+  /usr/local/bin/pi-ingress-session

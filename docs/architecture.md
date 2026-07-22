@@ -13,14 +13,15 @@ Assistant Core and is the trusted write boundary.
 
 ```mermaid
 flowchart LR
-  UI[Home Assistant Ingress UI] --> API[Fastify backend]
+  TUI[Home Assistant Ingress via ttyd] --> Pi[Native Pi TUI]
+  Pi --> Sandbox[Landlock session sandbox]
+  Sandbox --> API[Fastify backend]
   API --> DB[(SQLite under /data)]
   API --> Policy[Capability policy under /data]
   API --> HA[HA REST/WebSocket proxy]
   API -->|session-token protected broker| Broker[Structured tool broker]
-  Broker --> PI[Pi RPC worker + Landlock sandbox]
-  PI -->|typed read-only calls| Broker
-  PI -->|inference proxy| Provider[Configured model provider]
+  Broker --> Sandbox
+  Sandbox -->|inference proxy| Provider[Configured model provider]
   API --> Stage[Staging workspaces]
   API -->|approved manifest + apply request| Integration[Companion integration]
   Integration --> Config[/config atomic apply]
@@ -31,11 +32,13 @@ The App container uses no host networking, privileged mode, Docker socket, or
 host mounts. App packaging follows the current Home Assistant App contract;
 `build.yaml` is deliberately omitted because current builders no longer use it.
 
-Pi is launched with built-in tools disabled and the bundled extension at
-`app/pi-tools/ha-tools.ts`. That extension can call only the named broker tools;
+The Ingress surface launches Pi's native interactive TUI through `ttyd`; it is
+not a custom browser terminal. The Fastify frontend remains an internal API and
+future review surface. RPC sessions launched by the backend use the bundled
+extension at `app/pi-tools/ha-tools.ts`, which can call only named broker tools;
 the backend maps each name to one Home Assistant client method, validates and
 redacts inputs, and authenticates the call with a per-session token. The token
-is never returned to the Ingress browser or passed as a Supervisor credential.
+is never returned to the Ingress TUI or passed as a Supervisor credential.
 Capability policy updates are backend-enforced and immediately replace the
 broker policy for subsequent tool calls.
 

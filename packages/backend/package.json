@@ -11,7 +11,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@fastify/websocket": "^11.3.0",
     "@pi-ha/ha-client": "workspace:*",
     "@pi-ha/pi-runtime": "workspace:*",
     "@pi-ha/shared": "workspace:*",

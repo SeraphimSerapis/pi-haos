@@ -18,11 +18,18 @@ RUN pnpm deploy --legacy --filter @pi-ha/backend --prod /out
 RUN gcc -O2 -Wall -Wextra -o /src/pi-sandbox packages/pi-runtime/src/pi-sandbox.c
 
 FROM ghcr.io/hassio-addons/debian-base:9.1.0
+ARG TARGETARCH
 ENV NODE_ENV=production PORT=8099 HOST=0.0.0.0 FRONTEND_DIST=/app/frontend/dist \
   PI_VERSION=0.81.1 PI_COMMAND=/opt/pi/node_modules/.bin/pi
 WORKDIR /app
 COPY --from=build /usr/local/bin/node /usr/local/bin/node
-RUN mkdir -p /data /homeassistant
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+  && ttyd_arch="$([ "$TARGETARCH" = arm64 ] && echo aarch64 || echo x86_64)" \
+  && curl -fsSL --retry 3 -o /usr/local/bin/ttyd "https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.${ttyd_arch}" \
+  && chmod 0755 /usr/local/bin/ttyd \
+  && /usr/local/bin/ttyd --version \
+  && rm -rf /var/lib/apt/lists/* \
+  && mkdir -p /data /homeassistant
 COPY --from=build /out ./backend
 COPY --from=build /src/packages/frontend/dist ./frontend/dist
 COPY --from=build /src/pi-sandbox ./bin/pi-sandbox
@@ -31,7 +38,10 @@ COPY app/pi-runtime.json /app/pi-runtime.json
 COPY app/pi-tools /app/pi-tools
 COPY skills/bundled /app/bundled-skills
 COPY app/rootfs/etc /etc
+COPY app/rootfs/usr/local/bin /usr/local/bin
 COPY app/apparmor.txt /app/apparmor.txt
-RUN chmod 0755 /etc/s6-overlay/s6-rc.d/pi-agent/run
+RUN chmod 0755 /etc/s6-overlay/s6-rc.d/pi-agent/run \
+  /etc/s6-overlay/s6-rc.d/pi-ttyd/run \
+  /usr/local/bin/pi-ingress-session
 EXPOSE 8099
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD node /app/backend/dist/server.js
