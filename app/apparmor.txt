@@ -2,13 +2,28 @@
 # the live Home Assistant configuration is readable but never writable, and
 # private state is limited to the App's /data volume. The Pi child-process
 # filesystem boundary is enforced by the Landlock launcher.
+# AppArmor profiles loaded by Home Assistant must include the global tunables
+# file. Without it, newer HAOS AppArmor parsers reject the profile before the
+# App can be installed.
+#include <tunables/global>
+
 profile pi_homeassistant_agent flags=(attach_disconnected,mediate_deleted) {
   #include <abstractions/base>
+
+  # The container entrypoint and Node runtime need execute permissions. Keep
+  # this limited to the image's known runtime locations.
+  /entrypoint.sh rix,
+  /bin/** rix,
+  /usr/bin/** rix,
+  /usr/local/bin/** rix,
+  /opt/pi/** rix,
+  /app/bin/pi-sandbox rix,
+
+  file,
+  signal (send) set=(kill,term,int,hup,cont),
   network inet stream,
   network inet6 stream,
   /app/** r,
-  /opt/pi/** r,
-  /app/bin/pi-sandbox ix,
   /usr/** r,
   /lib/** r,
   /lib64/** r,
