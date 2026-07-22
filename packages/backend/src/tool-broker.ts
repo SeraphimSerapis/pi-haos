@@ -107,10 +107,17 @@ export class ToolBroker {
         result = await this.haClient.checkConfig();
         break;
       case 'ha_get_config_file':
-        result = await readConfigFile(
-          this.configRoot,
-          requiredString(input, 'path', 512),
-        );
+        try {
+          result = await readConfigFile(
+            this.configRoot,
+            requiredString(input, 'path', 512),
+          );
+        } catch (error) {
+          throw new ToolBrokerError(
+            400,
+            error instanceof Error ? error.message : 'Config file read failed',
+          );
+        }
         break;
       case 'workspace_read_file':
         result = await this.readWorkspaceFile(
@@ -130,7 +137,12 @@ export class ToolBroker {
   ): Promise<string> {
     if (!context.workspace)
       throw new ToolBrokerError(400, 'No workspace is assigned');
-    const root = await realpath(context.workspace);
+    let root: string;
+    try {
+      root = await realpath(context.workspace);
+    } catch {
+      throw new ToolBrokerError(400, 'Assigned workspace is unavailable');
+    }
     const target = resolve(root, requestedPath);
     const rel = relative(root, target);
     if (!rel || rel.startsWith('..' + '/') || isAbsolute(rel))
@@ -138,7 +150,12 @@ export class ToolBroker {
         400,
         'Workspace path escapes the assigned workspace',
       );
-    const targetReal = await realpath(target);
+    let targetReal: string;
+    try {
+      targetReal = await realpath(target);
+    } catch {
+      throw new ToolBrokerError(400, 'Workspace file does not exist');
+    }
     if (targetReal !== target && !targetReal.startsWith(`${root}/`))
       throw new ToolBrokerError(
         400,

@@ -795,8 +795,16 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
       const workspace = join(sessionRoot, `task-${task.id}`);
       await mkdir(workspace, { recursive: true, mode: 0o700 });
       const sessionId = `task-${task.id}`;
+      const toolToken = randomUUID();
       try {
-        await piRuntime.startSession({ sessionId, workspace });
+        const session = await piRuntime.startSession({
+          sessionId,
+          workspace,
+          toolToken,
+          toolBrokerUrl: process.env.TOOL_BROKER_URL ?? 'http://127.0.0.1:8099',
+        });
+        sessions.set(sessionId, session);
+        sessionTokens.set(sessionId, toolToken);
         const events = [];
         let responseSize = 0;
         const guardedPrompt = `Work only in the assigned staging workspace. Do not modify live Home Assistant files. Inspect and propose changes for this task; leave any proposed files in the workspace for review.\n\nUser task:\n${task.prompt}`;
@@ -837,6 +845,8 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
         return reply.code(502).send({ task: updated, error: 'Pi task failed' });
       } finally {
         await piRuntime.closeSession(sessionId).catch(() => undefined);
+        sessions.delete(sessionId);
+        sessionTokens.delete(sessionId);
       }
     },
   );
