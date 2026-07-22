@@ -7,10 +7,38 @@ export PI_UPDATES_ENABLED="$(bashio::config 'independent_pi_updates' || echo fal
 export PI_DEFAULT_PROVIDER="$(bashio::config 'default_provider' || true)"
 export PI_DEFAULT_MODEL="$(bashio::config 'default_model' || true)"
 export PI_TERMINAL_ENABLED="$(bashio::config 'terminal_enabled' || echo true)"
+export PI_HOME=/data/pi/home
 
 mkdir -p /data/database /data/sessions /data/transactions \
   /data/skills/bundled /data/skills/installed /data/skills/disabled /data/skills/metadata \
   /data/pi /data/logs
+
+catalog_json="$(bashio::config 'model_catalog' || echo '[]')"
+PI_MODEL_CATALOG="$catalog_json" node <<'NODE'
+const fs = require('node:fs');
+const path = '/data/pi/home/.pi/agent/models.json';
+let entries = [];
+try {
+  entries = JSON.parse(process.env.PI_MODEL_CATALOG || '[]');
+} catch {
+  process.stderr.write('Ignoring invalid model catalogue configuration\\n');
+}
+const providers = {};
+for (const entry of entries) {
+  if (!entry || !entry.provider || !entry.model) continue;
+  const provider = providers[entry.provider] ?? {
+    api: 'openai-completions',
+    baseUrl: entry.base_url || undefined,
+    models: [],
+  };
+  if (entry.api_key) provider.apiKey = entry.api_key;
+  if (!provider.models.some((model) => model.id === entry.model))
+    provider.models.push({ id: entry.model });
+  providers[entry.provider] = provider;
+}
+fs.mkdirSync('/data/pi/home/.pi/agent', { recursive: true, mode: 0o700 });
+fs.writeFileSync(path, `${JSON.stringify({ providers }, null, 2)}\n`, { mode: 0o600 });
+NODE
 
 if [ -d /app/bundled-skills ] && [ -w /data/skills/bundled ]; then
   for skill in /app/bundled-skills/*; do
