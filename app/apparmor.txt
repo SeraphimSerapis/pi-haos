@@ -47,5 +47,11 @@ profile pi_homeassistant_agent flags=(attach_disconnected,mediate_deleted) {
   deny /run/docker.sock rwklx,
   deny /proc/** w,
   deny /sys/** w,
-  deny /dev/** w,
+  # Do not blanket-deny /dev writes: s6 and bashio need /dev/null. Deny
+  # sensitive device nodes explicitly instead.
+  deny /dev/mem rwklx,
+  deny /dev/kmem rwklx,
+  deny /dev/kmsg rwklx,
+  deny /dev/port rwklx,
+  deny /dev/block/** rwklx,
 }
