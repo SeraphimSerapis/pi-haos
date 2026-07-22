@@ -82,6 +82,15 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@24.13.3)(tsx@4.23.1)
 
+  packages/transaction-engine:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.3.0
+        version: 24.13.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@24.13.3)(tsx@4.23.1)
+
 packages:
   '@esbuild/aix-ppc64@0.28.1':
     resolution:
