@@ -202,7 +202,7 @@ async function renderSkills(): Promise<void> {
         content: string;
       }>
     >('/skills');
-    content.innerHTML = `<section class="grid">${skills.length ? skills.map(({ manifest }) => `<article class="card"><h2>${escapeHtml(manifest.name)}</h2><p class="muted"><code>${escapeHtml(manifest.id)}</code> · v${escapeHtml(manifest.version)} · ${escapeHtml(manifest.source)}</p><p>${escapeHtml(manifest.description)}</p><p>Permissions: ${manifest.permissions.map(escapeHtml).join(', ') || 'none'}</p><button type="button" data-skill-source="${escapeHtml(manifest.source)}" data-skill-id="${escapeHtml(manifest.id)}" data-skill-enabled="${!manifest.enabled}">${manifest.enabled ? 'Disable' : 'Enable'}</button></article>`).join('') : '<article class="card"><p>No skills installed.</p></article>'}</section>`;
+    content.innerHTML = `<section class="grid">${skills.length ? skills.map(({ manifest, content: skillContent }) => `<article class="card"><h2>${escapeHtml(manifest.name)}</h2><p class="muted"><code>${escapeHtml(manifest.id)}</code> · v${escapeHtml(manifest.version)} · ${escapeHtml(manifest.source)}</p><p>${escapeHtml(manifest.description)}</p><p>Permissions: ${manifest.permissions.map(escapeHtml).join(', ') || 'none'}</p><button type="button" data-skill-source="${escapeHtml(manifest.source)}" data-skill-id="${escapeHtml(manifest.id)}" data-skill-enabled="${!manifest.enabled}">${manifest.enabled ? 'Disable' : 'Enable'}</button>${manifest.source !== 'bundled' ? ` <button type="button" data-skill-edit="${escapeHtml(manifest.id)}">Edit</button> <button type="button" data-skill-export="${escapeHtml(manifest.id)}">Export</button><textarea hidden data-skill-content="${escapeHtml(manifest.id)}">${escapeHtml(skillContent)}</textarea>` : ''}</article>`).join('') : '<article class="card"><p>No skills installed.</p></article>'}</section><section class="card"><h2>Create or edit a user skill</h2><form id="skill-form"><div class="grid"><label>ID<input name="id" required pattern="[a-z0-9][a-z0-9-]{1,63}" maxlength="64" /></label><label>Name<input name="name" required maxlength="128" /></label><label>Version<input name="version" required value="1.0.0" pattern="[0-9]+\\.[0-9]+\\.[0-9]+" /></label><label>Description<input name="description" required maxlength="512" /></label><label>Permissions<input name="permissions" placeholder="read_config, read_entities" /></label></div><label>Skill content<textarea name="content" rows="14" required placeholder="# Instructions for Pi\n"></textarea></label><button type="submit">Save user skill</button><label>Import exported skill<input id="skill-import" type="file" accept="application/json" /></label><p id="skill-result" class="muted"></p></form></section>`;
     document
       .querySelectorAll<HTMLButtonElement>('[data-skill-id]')
       .forEach((button) =>
@@ -220,6 +220,109 @@ async function renderSkills(): Promise<void> {
           await renderSkills();
         }),
       );
+    document
+      .querySelectorAll<HTMLButtonElement>('[data-skill-edit]')
+      .forEach((button) =>
+        button.addEventListener('click', () => {
+          const record = skills.find(
+            ({ manifest }) => manifest.id === button.dataset.skillEdit,
+          );
+          const form = document.querySelector<HTMLFormElement>('#skill-form');
+          if (!record || !form) return;
+          for (const [key, value] of Object.entries({
+            ...record.manifest,
+            permissions: record.manifest.permissions.join(', '),
+            content: record.content,
+          })) {
+            const field = form.elements.namedItem(
+              key,
+            ) as HTMLInputElement | null;
+            if (field) field.value = String(value ?? '');
+          }
+          form.scrollIntoView({ behavior: 'smooth' });
+        }),
+      );
+    document
+      .querySelectorAll<HTMLButtonElement>('[data-skill-export]')
+      .forEach((button) =>
+        button.addEventListener('click', () => {
+          const record = skills.find(
+            ({ manifest }) => manifest.id === button.dataset.skillExport,
+          );
+          if (!record) return;
+          const blob = new Blob([JSON.stringify(record, null, 2)], {
+            type: 'application/json',
+          });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = `${record.manifest.id}.json`;
+          link.click();
+          URL.revokeObjectURL(link.href);
+        }),
+      );
+    document
+      .querySelector<HTMLFormElement>('#skill-form')
+      ?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const form = new FormData(event.currentTarget as HTMLFormElement);
+        const id = String(form.get('id') ?? '');
+        const result = document.querySelector<HTMLElement>('#skill-result');
+        try {
+          await api(`/skills/user/${encodeURIComponent(id)}`, {
+            method: 'PUT',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              id,
+              name: form.get('name'),
+              version: form.get('version'),
+              description: form.get('description'),
+              permissions: String(form.get('permissions') ?? '')
+                .split(',')
+                .map((permission) => permission.trim())
+                .filter(Boolean),
+              compatibility: {},
+              enabled: true,
+              content: form.get('content'),
+            }),
+          });
+          if (result) result.textContent = 'Skill saved.';
+          await renderSkills();
+        } catch {
+          if (result) result.textContent = 'Skill could not be saved.';
+        }
+      });
+    document
+      .querySelector<HTMLInputElement>('#skill-import')
+      ?.addEventListener('change', async (event) => {
+        const file = (event.currentTarget as HTMLInputElement).files?.[0];
+        if (!file) return;
+        const result = document.querySelector<HTMLElement>('#skill-result');
+        try {
+          const imported = JSON.parse(await file.text()) as {
+            manifest?: Record<string, unknown>;
+            content?: string;
+          };
+          const manifest = imported.manifest;
+          if (!manifest || typeof imported.content !== 'string')
+            throw new Error('Invalid export');
+          await api(
+            `/skills/user/${encodeURIComponent(String(manifest.id ?? ''))}`,
+            {
+              method: 'PUT',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                ...manifest,
+                source: undefined,
+                content: imported.content,
+              }),
+            },
+          );
+          if (result) result.textContent = 'Skill imported.';
+          await renderSkills();
+        } catch {
+          if (result) result.textContent = 'Skill import failed.';
+        }
+      });
   } catch {
     content.innerHTML =
       '<section class="card"><p>Could not load skills.</p></section>';
