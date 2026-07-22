@@ -1,6 +1,9 @@
 #!/bin/sh
 set -eu
-if [ -f /data/options.json ]; then
+# Supervisor may mount options.json with permissions that intentionally do
+# not grant the image user access. Configuration is therefore best-effort;
+# validated defaults keep startup working in rootless environments.
+if [ -r /data/options.json ]; then
   configured_log_level="$(node -e "const o=require('/data/options.json'); process.stdout.write(String(o.log_level || 'info'))")"
   case "$configured_log_level" in
     trace|debug|info|warn|error) export LOG_LEVEL="$configured_log_level" ;;
@@ -12,7 +15,6 @@ if [ -f /data/options.json ]; then
   export DIAGNOSTICS_ENABLED="$configured_diagnostics"
 fi
 mkdir -p /data/database /data/sessions /data/transactions /data/skills /data/pi /data/logs
-chown -R pi-agent:pi-agent /data/database /data/sessions /data/transactions /data/skills /data/pi /data/logs
 if [ -d /app/bundled-skills ]; then
   for skill in /app/bundled-skills/*; do
     [ -d "$skill" ] || continue
@@ -22,5 +24,8 @@ if [ -d /app/bundled-skills ]; then
     fi
   done
 fi
-exec setpriv --reuid=10001 --regid=10001 --init-groups \
-  node /app/backend/dist/server.js
+if [ "$(id -u)" = "0" ]; then
+  exec setpriv --reuid=10001 --regid=10001 --init-groups \
+    node /app/backend/dist/server.js
+fi
+exec node /app/backend/dist/server.js
