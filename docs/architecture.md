@@ -22,8 +22,9 @@ flowchart LR
   PI -->|typed read-only calls| Broker
   PI -->|inference proxy| Provider[Configured model provider]
   API --> Stage[Staging workspaces]
-  API -->|approved manifest| Integration[Companion integration]
+  API -->|approved manifest + apply request| Integration[Companion integration]
   Integration --> Config[/config atomic apply]
+  Integration -->|authenticated result| API
 ```
 
 The App container uses no host networking, privileged mode, Docker socket, or
