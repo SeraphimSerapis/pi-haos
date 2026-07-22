@@ -6,6 +6,10 @@ export default defineConfig({
     alias: {
       '@pi-ha/shared': resolve(__dirname, '../shared/src/index.ts'),
       '@pi-ha/ha-client': resolve(__dirname, '../ha-client/src/index.ts'),
+      '@pi-ha/skills-manager': resolve(
+        __dirname,
+        '../skills-manager/src/index.ts',
+      ),
     },
   },
 });

@@ -22,6 +22,9 @@ importers:
       '@pi-ha/shared':
         specifier: workspace:*
         version: link:../shared
+      '@pi-ha/skills-manager':
+        specifier: workspace:*
+        version: link:../skills-manager
       fastify:
         specifier: ^5.4.0
         version: 5.10.0

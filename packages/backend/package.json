@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@pi-ha/ha-client": "workspace:*",
+    "@pi-ha/skills-manager": "workspace:*",
     "@pi-ha/shared": "workspace:*",
     "fastify": "^5.4.0"
   },

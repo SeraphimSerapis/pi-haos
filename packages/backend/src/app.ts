@@ -4,6 +4,8 @@ import { readFile } from 'node:fs/promises';
 import { appStatusSchema, type AppStatus } from '@pi-ha/shared';
 import { HomeAssistantClient, readConfigFile } from '@pi-ha/ha-client';
 import { ModelCatalog, type ModelProviderInput } from './model-catalog.js';
+import { SkillsManager } from '@pi-ha/skills-manager';
+import type { SkillManifest } from '@pi-ha/skills-manager';
 
 const appVersion = process.env.APP_VERSION ?? '0.1.0';
 
@@ -11,6 +13,7 @@ export interface AppOptions {
   haClient?: HomeAssistantClient;
   configRoot?: string;
   modelCatalog?: ModelCatalog;
+  skillsManager?: SkillsManager;
 }
 
 export function createApp(options: AppOptions = {}): FastifyInstance {
@@ -26,6 +29,7 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
   const configRoot =
     options.configRoot ?? process.env.HOMEASSISTANT_CONFIG ?? '/homeassistant';
   const modelCatalog = options.modelCatalog ?? new ModelCatalog();
+  const skillsManager = options.skillsManager ?? new SkillsManager();
 
   app.get('/api/v1/health', async () => ({ status: 'ok' }));
 
@@ -109,6 +113,67 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
         providerId: provider.id,
         modelCount: provider.models.length,
       };
+    },
+  );
+
+  app.get('/api/v1/skills', async () => skillsManager.list());
+  app.put<{
+    Params: { source: 'installed' | 'user'; id: string };
+    Body: Omit<SkillManifest, 'source'> & { content: string };
+  }>('/api/v1/skills/:source/:id', async (request, reply) => {
+    if (
+      request.params.source !== 'installed' &&
+      request.params.source !== 'user'
+    )
+      return reply.code(400).send({ error: 'Invalid skill source' });
+    try {
+      return await skillsManager.save(
+        { ...request.body, id: request.params.id },
+        request.body.content,
+        request.params.source,
+      );
+    } catch (error) {
+      return reply.code(400).send({
+        error: error instanceof Error ? error.message : 'Invalid skill',
+      });
+    }
+  });
+  app.post<{
+    Params: { source: 'bundled' | 'installed' | 'user'; id: string };
+    Body: { enabled?: boolean };
+  }>('/api/v1/skills/:source/:id/enabled', async (request, reply) => {
+    try {
+      return await skillsManager.setEnabled(
+        request.params.source,
+        request.params.id,
+        request.body?.enabled ?? true,
+      );
+    } catch (error) {
+      return reply.code(400).send({
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Unable to change skill state',
+      });
+    }
+  });
+  app.delete<{ Params: { source: 'installed' | 'user'; id: string } }>(
+    '/api/v1/skills/:source/:id',
+    async (request, reply) => {
+      if (
+        request.params.source !== 'installed' &&
+        request.params.source !== 'user'
+      )
+        return reply.code(400).send({ error: 'Invalid skill source' });
+      try {
+        await skillsManager.remove(request.params.source, request.params.id);
+        return { status: 'removed' };
+      } catch (error) {
+        return reply.code(400).send({
+          error:
+            error instanceof Error ? error.message : 'Unable to remove skill',
+        });
+      }
     },
   );
 

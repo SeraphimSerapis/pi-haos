@@ -45,6 +45,10 @@ function renderSection(section: string): void {
     void renderModels();
     return;
   }
+  if (section === 'skills') {
+    void renderSkills();
+    return;
+  }
   content.innerHTML = `<section class="card"><h2>${escapeHtml(section[0]?.toUpperCase() + section.slice(1))}</h2><p class="muted">This section is scaffolded for the staged, auditable workflow.</p></section>`;
   if (section === 'chat') void renderStatus();
 }
@@ -110,6 +114,48 @@ async function renderModels(): Promise<void> {
   } catch {
     content.innerHTML =
       '<section class="card"><p>Could not load model providers.</p></section>';
+  }
+}
+
+async function renderSkills(): Promise<void> {
+  if (!content) return;
+  content.innerHTML = '<section class="card"><p>Loading skills…</p></section>';
+  try {
+    const skills = await api<
+      Array<{
+        manifest: {
+          id: string;
+          name: string;
+          version: string;
+          description: string;
+          source: string;
+          enabled: boolean;
+          permissions: string[];
+        };
+        content: string;
+      }>
+    >('/skills');
+    content.innerHTML = `<section class="grid">${skills.length ? skills.map(({ manifest }) => `<article class="card"><h2>${escapeHtml(manifest.name)}</h2><p class="muted"><code>${escapeHtml(manifest.id)}</code> · v${escapeHtml(manifest.version)} · ${escapeHtml(manifest.source)}</p><p>${escapeHtml(manifest.description)}</p><p>Permissions: ${manifest.permissions.map(escapeHtml).join(', ') || 'none'}</p><button type="button" data-skill-source="${escapeHtml(manifest.source)}" data-skill-id="${escapeHtml(manifest.id)}" data-skill-enabled="${!manifest.enabled}">${manifest.enabled ? 'Disable' : 'Enable'}</button></article>`).join('') : '<article class="card"><p>No skills installed.</p></article>'}</section>`;
+    document
+      .querySelectorAll<HTMLButtonElement>('[data-skill-id]')
+      .forEach((button) =>
+        button.addEventListener('click', async () => {
+          await api(
+            `/skills/${encodeURIComponent(button.dataset.skillSource ?? '')}/${encodeURIComponent(button.dataset.skillId ?? '')}/enabled`,
+            {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                enabled: button.dataset.skillEnabled === 'true',
+              }),
+            },
+          );
+          await renderSkills();
+        }),
+      );
+  } catch {
+    content.innerHTML =
+      '<section class="card"><p>Could not load skills.</p></section>';
   }
 }
 
