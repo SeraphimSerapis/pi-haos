@@ -687,6 +687,51 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
       return transaction;
     },
   );
+  app.post<{
+    Params: { id: string };
+    Body: { status?: 'completed' | 'failed' | 'rolled_back'; error?: string };
+  }>(
+    '/api/v1/bridge/transactions/:id/result',
+    { preHandler: requireBridgeAuth },
+    async (request, reply) => {
+      const transaction = transactionStore.get(request.params.id);
+      const status = request.body?.status;
+      if (!transaction || transaction.state !== 'applying')
+        return reply.code(409).send({ error: 'Transaction is not applying' });
+      if (
+        status !== 'completed' &&
+        status !== 'failed' &&
+        status !== 'rolled_back'
+      )
+        return reply.code(400).send({ error: 'Invalid transaction result' });
+      const next = transactionStore.update({
+        ...transaction,
+        state: status,
+        validation:
+          status === 'completed'
+            ? { status: 'passed', errors: [] }
+            : { status: 'failed', errors: [request.body?.error ?? status] },
+        updatedAt: new Date().toISOString(),
+      });
+      taskStore.transition(
+        transaction.taskId,
+        status === 'completed' ? 'completed' : status,
+        {
+          transactionId: transaction.id,
+          ...(request.body?.error ? { error: request.body.error } : {}),
+        },
+      );
+      audit({
+        action: 'transaction.apply.result',
+        initiator: 'home-assistant-integration',
+        taskId: transaction.taskId,
+        transactionId: transaction.id,
+        decision: status,
+        details: { error: request.body?.error ?? null },
+      });
+      return next;
+    },
+  );
   app.post<{ Params: { id: string; action: string } }>(
     '/api/v1/bridge/tasks/:id/:action',
     { preHandler: requireBridgeAuth },
@@ -956,6 +1001,65 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
         details: { errors: validated.validation.errors },
       });
       return validated;
+    },
+  );
+  app.post<{ Params: { id: string }; Body: { confirm?: boolean } }>(
+    '/api/v1/transactions/:id/apply',
+    async (request, reply) => {
+      const transaction = transactionStore.get(request.params.id);
+      if (
+        !transaction ||
+        transaction.state !== 'approved' ||
+        transaction.validation.status !== 'passed'
+      )
+        return reply
+          .code(404)
+          .send({ error: 'Approved validated transaction not found' });
+      if (request.body?.confirm !== true)
+        return reply
+          .code(400)
+          .send({ error: 'Explicit apply confirmation is required' });
+      if (policyStore.get().apply_config === 'deny')
+        return reply
+          .code(403)
+          .send({ error: 'Configuration apply is denied by policy' });
+      const applying = transactionStore.update({
+        ...transaction,
+        state: 'applying',
+        updatedAt: new Date().toISOString(),
+      });
+      try {
+        await haClient.callService(
+          'pi_homeassistant_agent',
+          'apply_transaction',
+          { transaction_id: transaction.id },
+        );
+        audit({
+          action: 'transaction.apply.request',
+          initiator: 'frontend',
+          taskId: transaction.taskId,
+          transactionId: transaction.id,
+          decision: 'approved',
+          details: { files: transaction.files.map((file) => file.path) },
+        });
+        return { status: 'requested', transaction: applying };
+      } catch (error) {
+        const failed = transactionStore.update({
+          ...applying,
+          state: 'failed',
+          validation: {
+            status: 'failed',
+            errors: [
+              error instanceof Error ? error.message : 'Apply request failed',
+            ],
+          },
+          updatedAt: new Date().toISOString(),
+        });
+        return reply.code(502).send({
+          error: 'Unable to request transaction apply',
+          transaction: failed,
+        });
+      }
     },
   );
 

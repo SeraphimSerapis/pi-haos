@@ -55,9 +55,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             elif service == SERVICE_REJECT_TASK:
                 result = await configured["api"].reject_task(payload["task_id"])
             elif service == SERVICE_APPLY_TRANSACTION:
-                transaction = await configured["api"].get_transaction(payload["transaction_id"])
-                result = await hass.async_add_executor_job(
-                    apply_approved_transaction, hass.config.path(), transaction
+                transaction_id = payload["transaction_id"]
+                try:
+                    transaction = await configured["api"].get_transaction(transaction_id)
+                    result = await hass.async_add_executor_job(
+                        apply_approved_transaction, hass.config.path(), transaction
+                    )
+                except Exception as error:
+                    await configured["api"].report_transaction_result(
+                        transaction_id, "failed", str(error)
+                    )
+                    raise
+                await configured["api"].report_transaction_result(
+                    transaction_id, result.get("status", "completed")
                 )
             elif service == SERVICE_RELOAD_DOMAIN:
                 result = await configured["api"].reload_domain(payload["domain"])

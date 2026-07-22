@@ -452,6 +452,71 @@ describe('staged task routes', () => {
     transactionStore.close();
   });
 
+  it('requests companion apply and accepts an authenticated result callback', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'pi-apply-api-'));
+    const pairing = new PairingManager(join(root, 'pairing.json'));
+    const token = await pairing.exchange(
+      (await pairing.status()).pairingCode ?? '',
+    );
+    const transactionStore = new TransactionStore(':memory:');
+    const taskStore = new TaskStore(':memory:');
+    const callService = vi.fn(async () => []);
+    transactionStore.registerReview({
+      id: 'tx-apply',
+      taskId: 'task-apply',
+      state: 'approved',
+      diffHash: 'hash',
+      files: [
+        {
+          path: 'automations.yaml',
+          content: '[]\n',
+          originalHash: null,
+          approved: true,
+        },
+      ],
+      validation: { status: 'passed', errors: [] },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      approvedAt: new Date().toISOString(),
+    });
+    const app = createApp({
+      pairingManager: pairing,
+      transactionStore,
+      taskStore,
+      haClient: { callService } as unknown as HomeAssistantClient,
+    });
+    await app.ready();
+    const missing = await app.inject({
+      method: 'POST',
+      url: '/api/v1/transactions/tx-apply/apply',
+      payload: {},
+    });
+    expect(missing.statusCode).toBe(400);
+    const requested = await app.inject({
+      method: 'POST',
+      url: '/api/v1/transactions/tx-apply/apply',
+      payload: { confirm: true },
+    });
+    expect(requested.statusCode).toBe(200);
+    expect(callService).toHaveBeenCalledWith(
+      'pi_homeassistant_agent',
+      'apply_transaction',
+      { transaction_id: 'tx-apply' },
+    );
+    const result = await app.inject({
+      method: 'POST',
+      url: '/api/v1/bridge/transactions/tx-apply/result',
+      headers: { 'x-pi-integration-token': token },
+      payload: { status: 'completed' },
+    });
+    expect(result.statusCode).toBe(200);
+    expect(result.json().state).toBe('completed');
+    await app.close();
+    taskStore.close();
+    transactionStore.close();
+    await rm(root, { recursive: true, force: true });
+  });
+
   it('exposes redacted audit history without credentials', async () => {
     const auditStore = new AuditStore(':memory:');
     const app = createApp({ auditStore, haClient: {} as HomeAssistantClient });

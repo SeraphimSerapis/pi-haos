@@ -15,7 +15,10 @@ and
 validation, the companion integration fetches the approved manifest by
 transaction ID over the integration token. This keeps the App authoritative
 for staged contents without putting a large write payload in a Home Assistant
-service call.
+service call. The Changes view can explicitly request that service through
+`POST /api/v1/transactions/:id/apply`; the backend marks the transaction
+`applying` first and the integration reports `completed`, `failed`, or
+`rolled_back` through the authenticated bridge callback.
 
 The integration rechecks live hashes and uses same-directory temporary files
 and atomic renames. It retains original snapshots and restores them when a

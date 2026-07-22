@@ -393,7 +393,7 @@ async function renderTransactions(section: string): Promise<void> {
       content.innerHTML = `<section class="card"><h2>${escapeHtml(section[0]?.toUpperCase() + section.slice(1))}</h2><p class="muted">No staged transactions are available.</p></section>`;
       return;
     }
-    content.innerHTML = `<section class="grid">${transactions.map((transaction) => `<article class="card"><h2><code>${escapeHtml(transaction.id)}</code></h2><p>${escapeHtml(transaction.state)} · validation: ${escapeHtml(transaction.validation.status)}</p><p class="muted">${escapeHtml(transaction.files.map((file) => file.path).join(', '))}</p><details><summary>Diff hash</summary><code>${escapeHtml(transaction.diffHash)}</code></details>${transaction.files.map((file) => `<details><summary>${escapeHtml(file.path)}</summary><pre>${escapeHtml(file.diff ?? 'Diff unavailable')}</pre></details>`).join('')}${transaction.validation.errors.length ? `<pre>${escapeHtml(transaction.validation.errors.join('\\n'))}</pre>` : ''}${transaction.state === 'awaiting_review' ? `<button type="button" data-transaction-validate="${escapeHtml(transaction.id)}">Validate YAML</button> ${transaction.validation.status === 'passed' ? `<button type="button" data-transaction-approve="${escapeHtml(transaction.id)}">Approve all files</button>` : ''}` : ''}</article>`).join('')}</section>`;
+    content.innerHTML = `<section class="grid">${transactions.map((transaction) => `<article class="card"><h2><code>${escapeHtml(transaction.id)}</code></h2><p>${escapeHtml(transaction.state)} · validation: ${escapeHtml(transaction.validation.status)}</p><p class="muted">${escapeHtml(transaction.files.map((file) => file.path).join(', '))}</p><details><summary>Diff hash</summary><code>${escapeHtml(transaction.diffHash)}</code></details>${transaction.files.map((file) => `<details><summary>${escapeHtml(file.path)}</summary><pre>${escapeHtml(file.diff ?? 'Diff unavailable')}</pre></details>`).join('')}${transaction.validation.errors.length ? `<pre>${escapeHtml(transaction.validation.errors.join('\\n'))}</pre>` : ''}${transaction.state === 'awaiting_review' ? `<button type="button" data-transaction-validate="${escapeHtml(transaction.id)}">Validate YAML</button> ${transaction.validation.status === 'passed' ? `<button type="button" data-transaction-approve="${escapeHtml(transaction.id)}">Approve all files</button>` : ''}` : ''}${transaction.state === 'approved' && transaction.validation.status === 'passed' ? `<button type="button" data-transaction-apply="${escapeHtml(transaction.id)}">Apply approved files</button>` : ''}</article>`).join('')}</section>`;
     document
       .querySelectorAll<HTMLButtonElement>('[data-transaction-approve]')
       .forEach((button) =>
@@ -418,6 +418,24 @@ async function renderTransactions(section: string): Promise<void> {
           await api(
             `/transactions/${encodeURIComponent(button.dataset.transactionValidate ?? '')}/validate`,
             { method: 'POST' },
+          );
+          await renderTransactions('changes');
+        }),
+      );
+    document
+      .querySelectorAll<HTMLButtonElement>('[data-transaction-apply]')
+      .forEach((button) =>
+        button.addEventListener('click', async () => {
+          if (!window.confirm('Apply the approved files to Home Assistant?'))
+            return;
+          button.disabled = true;
+          await api(
+            `/transactions/${encodeURIComponent(button.dataset.transactionApply ?? '')}/apply`,
+            {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ confirm: true }),
+            },
           );
           await renderTransactions('changes');
         }),

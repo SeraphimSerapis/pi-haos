@@ -89,6 +89,19 @@ class PiAgentApi:
         except Exception as error:
             raise PiAgentApiError("Unable to reach Pi Agent App") from error
 
+    async def report_transaction_result(
+        self, transaction_id: str, status: str, error: str | None = None
+    ) -> dict[str, Any]:
+        """Report the result of an integration-owned atomic apply."""
+        if status not in {"completed", "failed", "rolled_back"}:
+            raise PiAgentApiError("Invalid transaction result")
+        payload: dict[str, Any] = {"status": status}
+        if error:
+            payload["error"] = error[:2048]
+        return await self._post(
+            f"/api/v1/bridge/transactions/{transaction_id}/result", payload
+        )
+
     async def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         session = async_get_clientsession(self._hass)
         try:
