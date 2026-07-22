@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PairingManager } from './pairing.js';
 import { TransactionStore } from './transaction-store.js';
+import { TaskStore } from './task-store.js';
 import { createApp } from './app.js';
 
 describe('backend health API', () => {
@@ -79,6 +80,31 @@ describe('read-only Home Assistant context routes', () => {
     });
     expect(response.statusCode).toBe(400);
     await app.close();
+  });
+});
+
+describe('staged task routes', () => {
+  it('creates and transitions a bounded task record', async () => {
+    const taskStore = new TaskStore(':memory:');
+    const app = createApp({ taskStore, haClient: {} as HomeAssistantClient });
+    await app.ready();
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/tasks',
+      payload: { prompt: 'Review automations', initiator: 'test' },
+    });
+    expect(created.statusCode).toBe(201);
+    const id = created.json().id as string;
+    const approved = await app.inject({
+      method: 'POST',
+      url: `/api/v1/tasks/${id}/approve`,
+    });
+    expect(approved.statusCode).toBe(200);
+    expect(approved.json().state).toBe('approved');
+    const listed = await app.inject({ method: 'GET', url: '/api/v1/tasks' });
+    expect(listed.json()).toHaveLength(1);
+    await app.close();
+    taskStore.close();
   });
 });
 
