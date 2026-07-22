@@ -231,7 +231,7 @@ describe('isolated Pi chat routes', () => {
     const pairing = new PairingManager(join(root, 'pairing.json'));
     const code = (await pairing.status()).pairingCode ?? '';
     const token = await pairing.exchange(code);
-    const transactionStore = new TransactionStore();
+    const transactionStore = new TransactionStore(':memory:');
     transactionStore.register({
       id: 'tx-approved',
       state: 'approved',

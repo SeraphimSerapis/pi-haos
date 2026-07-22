@@ -63,7 +63,18 @@ export function createApp(options: AppOptions = {}): FastifyInstance {
   const sessionRoot =
     options.sessionRoot ?? join(process.env.DATA_DIR ?? '/data', 'sessions');
   const pairing = options.pairingManager ?? new PairingManager();
-  const transactionStore = options.transactionStore ?? new TransactionStore();
+  const transactionStore =
+    options.transactionStore ??
+    new TransactionStore(
+      process.env.TRANSACTION_DATABASE ??
+        (process.env.NODE_ENV === 'test'
+          ? ':memory:'
+          : join(
+              process.env.DATA_DIR ?? '/data',
+              'database',
+              'transactions.sqlite',
+            )),
+    );
   const taskStore =
     options.taskStore ??
     new TaskStore(
